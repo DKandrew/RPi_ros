@@ -4,7 +4,7 @@ project(ros2gpio)
 ## Find catkin macros and libraries
 ## if COMPONENTS list like find_package(catkin REQUIRED COMPONENTS xyz)
 ## is used, also find other catkin packages
-find_package(catkin REQUIRED COMPONENTS roscpp)
+find_package(catkin REQUIRED COMPONENTS roscpp geometry_msgs)
 
 FIND_LIBRARY(WIRINGPI_LIBRARY wiringPi /home/pi/wiringPi)
 
@@ -118,9 +118,11 @@ catkin_package(
 
 ## Declare a C++ executable
 
-add_executable(ros2gpio ros2gpio.cpp)
-target_link_libraries(ros2gpio ${catkin_LIBRARIES} ${WIRINGPI_LIBRARY})
-# add_dependencies(ros2gpio wiringPi)
+add_executable(led_pub led_pub.cpp)
+target_link_libraries(led_pub ${catkin_LIBRARIES})
+
+add_executable(led_sub led_sub.cpp)
+target_link_libraries(led_sub ${catkin_LIBRARIES} ${WIRINGPI_LIBRARY})
 
 ## Add cmake target dependencies of the executable
 ## same as for the library above
