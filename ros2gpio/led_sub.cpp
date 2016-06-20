@@ -25,6 +25,9 @@ int main(int argc, char **argv){
 	//set up wiringPi
 	wiringPiSetup();
 	pinMode(7, OUTPUT);
+	pinMode(0, OUTPUT);
+	pinMode(2, OUTPUT);
+	pinMode(3, OUTPUT);
 	//Create a subscriber
 	ros::Subscriber sub = nh.subscribe("led/cmd_vel", 1000, &messageHandler);
 	while(ros::ok()){
