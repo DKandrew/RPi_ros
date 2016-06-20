@@ -95,7 +95,7 @@ generate_messages(
 ## CATKIN_DEPENDS: catkin_packages dependent projects also need
 ## DEPENDS: system dependencies of this project that dependent projects also need
 catkin_package(
-	CATKIN_DEPENDS message_runtime
+	CATKIN_DEPENDS message_runtime 
 )
 
 ###########
@@ -120,6 +120,8 @@ catkin_package(
 
 add_executable(led_pub led_pub.cpp)
 target_link_libraries(led_pub ${catkin_LIBRARIES})
+#add_dependencies(led_pub )
+#add_dependencies(led_pub ${${ros2gpio}_EXPORTED_TARGETS})
 
 add_executable(led_sub led_sub.cpp)
 target_link_libraries(led_sub ${catkin_LIBRARIES} ${WIRINGPI_LIBRARY})
