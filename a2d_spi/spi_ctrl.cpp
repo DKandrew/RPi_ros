@@ -29,7 +29,7 @@ int main(int argc, char**argv){
 	ros::init(argc, argv, "spi_ctrl");
 	ros::NodeHandle nh;
 	//Create a publisher object
-	ros::Publisher pub = nh.advertise<a2d_spi::a2d>("a2d/control", 1000);
+	ros::Publisher pub = nh.advertise<a2d_spi::a2d>("a2d/voltageControl", 1000);
 	//Frequency Control
 	ros::Rate rate(8);
 	//Setup wiringPi SPI

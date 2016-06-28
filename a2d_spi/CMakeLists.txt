@@ -38,7 +38,7 @@ FIND_LIBRARY(WIRINGPI_LIBRARY wiringPi /home/pi/wiringPi)
 ## Generate messages in the 'msg' folder
 add_message_files(
   FILES
-  a2d.msg
+  volt_msg.msg
 )
 
 ## Generate services in the 'srv' folder
