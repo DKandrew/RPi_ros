@@ -31,7 +31,10 @@ int main(int argc, char**argv){
 	//Create a publisher object
 	ros::Publisher pub = nh.advertise<a2d_spi::a2d>("a2d/voltageControl", 1000);
 	//Frequency Control
-	ros::Rate rate(8);
+	int sampleRate;
+	cout << "Sample Rate is ? " << endl;
+	cin >> sampleRate;
+	ros::Rate rate(sampleRate);
 	//Setup wiringPi SPI
 	int channel = 0;
 	if(wiringPiSPISetup(channel,1000000) == -1){
@@ -40,6 +43,9 @@ int main(int argc, char**argv){
 	}
 	//Main
 	int loop_cnt = 0;
+	double currTime = ros::Time::now().toSec();
+	double nextTime = currTime;
+	double rateTime = nextTime - currTime; 
 	while(ros::ok()){
 		uint8_t a = 0x01;
 		uint8_t b = 0x90;
@@ -51,9 +57,18 @@ int main(int argc, char**argv){
 		//Publish the message.
 		pub.publish(msg);
 		//Send a message to rosout with details
-		ROS_INFO_STREAM("A/D voltage message sent!");
+		//ROS_INFO_STREAM("A/D voltage message sent!");
+		//measure rate
+		loop_cnt++;
+		if(loop_cnt % sampleRate == 0){
+			nextTime = ros::Time::now().toSec();
+			rateTime = nextTime - currTime;
+			cout << rateTime << endl;
+			currTime = nextTime;
+		}
 		//Wait
 		rate.sleep();
+		
 	}
 }
 
