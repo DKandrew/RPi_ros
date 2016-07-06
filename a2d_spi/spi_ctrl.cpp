@@ -60,12 +60,13 @@ int main(int argc, char**argv){
 		//ROS_INFO_STREAM("A/D voltage message sent!");
 		//measure rate
 		loop_cnt++;
-		if(loop_cnt % sampleRate == 0){
+		/*if(loop_cnt % sampleRate == 0){
 			nextTime = ros::Time::now().toSec();
 			rateTime = nextTime - currTime;
 			cout << rateTime << endl;
 			currTime = nextTime;
 		}
+		*/
 		//Wait
 		rate.sleep();
 		
