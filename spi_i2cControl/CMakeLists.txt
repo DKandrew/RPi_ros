@@ -5,7 +5,7 @@ find_package(catkin REQUIRED COMPONENTS
 	roscpp
 )
 
-find_package(PythonLibs 2.7 EXACT)
+#find_package(PythonLibs 2.7 EXACT)
 
 FIND_LIBRARY(WIRINGPI_LIBRARY wiringPi /home/pi/library/wiringPi)
 #FIND_LIBRARY(PYTHON_LIBRARY python2.7 /usr/include/python2.7/)
@@ -88,7 +88,7 @@ catkin_package(
 # add_dependencies(spi_i2cControl ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS})
 
 ## Declare a C++ executable
-add_executable(main_Control_node main_Control.cpp pca9685_class.cpp py_algorithm.cpp)
+add_executable(main_Control_node main_Control.cpp pca9685.cpp py_algorithm.cpp)
 target_link_libraries(main_Control_node ${catkin_LIBRARIES} ${WIRINGPI_LIBRARY} ${PYTHON_LIBRARIES})
 
 ## Add cmake target dependencies of the executable

@@ -1,7 +1,7 @@
 #include <ros/ros.h>
 #include <iostream>
-#include <python2.7/Python.h>
-#include "pca9685_class.h"
+//#include <python2.7/Python.h>
+#include "pca9685.h"
 #include "py_algorithm.h"
 #include "wiringPi.h"
 #include <wiringPiSPI.h>
@@ -45,8 +45,6 @@ int main(int argc, char**argv){
 	//Initialize ROS system
 	ros::init(argc, argv, "main_Control");
 	ros::NodeHandle nh;
-	// Initialize the Python Interpreter
-	Py_Initialize();
 	//Frequency Control
 	int sampleRate;
 	cout << "Sample Rate is ? " << endl;
@@ -59,7 +57,8 @@ int main(int argc, char**argv){
 		return -1;
 	}
 	//Setup I2C
-	pca9685 pwm = pca9685();
+	int addr = 0x40;
+	pca9685 pwm = pca9685(addr);
 	int pos1, pos2, pos3;
 	srand(0);
 	//Set frequency to 60hz, good for servos
@@ -80,10 +79,15 @@ int main(int argc, char**argv){
 			inverse_kinematics(array, result);
 		}
 		// I2C Control 
+		/*
 		pos1 = rand()%450 +150;		//Generate random number
 		pos2 = rand()%450 +150;
 		pos3 = rand()%450 +150;
-		//I2C_ctrl(&pwm, pos1, pos2, pos3);
+		*/
+		pos1 = 200;		//Generate random number
+		pos2 = 300;
+		pos3 = 400;
+		I2C_ctrl(&pwm, pos1, pos2, pos3);
 		// GPIO control
 		if(LED_ON == 0){
 			LED_ON = 1;
@@ -96,7 +100,5 @@ int main(int argc, char**argv){
 		rate.sleep();
 		
 	}
-	//Finish the Python Interpreter
-	Py_Finalize();
 }
 
