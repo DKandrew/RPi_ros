@@ -9,6 +9,7 @@
 #include <unistd.h>		// Time delay library
 #include <sys/ioctl.h>
 #include <linux/i2c-dev.h>	//i2c-tools library
+#include <vector>
 
 using namespace std;
 
@@ -41,5 +42,6 @@ class pca9685 {
 		void reset();
 		void set_pwm_freq(int freq_hz);
 		void set_pwm(int channel, int on, int off);
-		int i2cWrite(int fd, int devid, char* data);
+		int i2cWrite(int fd, int devid, char* data, int data_len);
+		void set_pwm(vector<int> & pos);
 };

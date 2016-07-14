@@ -1,6 +1,5 @@
 #include <ros/ros.h>
 #include <iostream>
-//#include <python2.7/Python.h>
 #include "pca9685.h"
 #include "py_algorithm.h"
 #include "wiringPi.h"
@@ -35,9 +34,23 @@ uint16_t SPI_ctrl(int channel){
 }
 
 //I2C control to three servos
+void I2C_ctrl(pca9685 *pwm, vector<int> & pos){
+	pwm->set_pwm(pos);
+}
+
+
+/*
+//I2C control to three servos
 void I2C_ctrl(pca9685 *pwm, int pos1, int pos2, int pos3){
-	pwm->set_pwm(1,0,pos1);
-	/*
+	int servo_num = 2;
+	int pos[servo_num];
+	pos[0] = pos1;
+	pos[1] = pos2;
+	pwm->set_pwm(pos);
+	
+	
+	//pwm->set_pwm(1,0,pos1);
+	
 	pwm->set_pwm(1,0,pos1); //Servo 1
 	pwm->set_pwm(2,0,pos2); //Servo 2
 	pwm->set_pwm(3,0,pos3); //Servo 3
@@ -50,8 +63,9 @@ void I2C_ctrl(pca9685 *pwm, int pos1, int pos2, int pos3){
 	pwm->set_pwm(10,0,pos1); //Servo 10
 	pwm->set_pwm(11,0,pos2); //Servo 11
 	pwm->set_pwm(12,0,pos3); //Servo 12
-	*/
+	
 }
+*/
 
 int main(int argc, char**argv){
 	//Initialize ROS system
@@ -73,6 +87,9 @@ int main(int argc, char**argv){
 	pca9685 pwm = pca9685(addr);
 	int pos1, pos2, pos3;
 	srand(0);
+	//Servo position vector
+	int servo_num = 3;
+	vector<int> pos (servo_num);
 	//Set frequency to 60hz, good for servos
 	pwm.set_pwm_freq(60);
 	//Setup GPIO
@@ -92,9 +109,9 @@ int main(int argc, char**argv){
 		}
 		// I2C Control 
 		
-		pos1 = rand()%450 +150;		//Generate random number
-		pos2 = rand()%450 +150;
-		pos3 = rand()%450 +150;
+		pos[0] = rand()%450 +150;		//Generate random number
+		pos[1] = rand()%450 +150;
+		pos[2] = rand()%450 +150;
 		
 		/*
 		pos1 = 200;		//Generate random number
@@ -102,7 +119,7 @@ int main(int argc, char**argv){
 		pos3 = 400;
 		*/
 		
-		I2C_ctrl(&pwm, pos1, pos2, pos3);
+		I2C_ctrl(&pwm, pos);
 		// GPIO control
 		if(LED_ON == 0){
 			LED_ON = 1;

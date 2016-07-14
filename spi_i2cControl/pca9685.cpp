@@ -41,7 +41,28 @@ void pca9685::set_pwm(int channel, int on, int off){
 		data[4*i+3] = off & 0xFF;
 		data[4*i+4] = off >> 8;
 	}
-	i2cWrite(fd, _i2caddr, data);	
+	//i2cWrite(fd, _i2caddr, data);	
+}
+
+// Func: set_pwm for all servo
+void pca9685::set_pwm(vector<int> & pos){
+	
+	int on = 0;
+	int channel = pos.size(); 	//Channel is the number of servo we control.
+	int dataSize = 4*channel;
+	//cout << "channel: " << channel << endl;
+	char data[dataSize+1]; 	// dataSize + 1 because we need to include the starting register's address
+	data[0] = LED0_ON_L; 	// Start from LED0_ON_L address
+	//cout << "dataSize: " << dataSize << endl;
+	
+	for(int i=0; i<channel; i++){
+		int off = pos[i];
+		data[4*i+1] = on & 0xFF;
+		data[4*i+2] = on >> 8;
+		data[4*i+3] = off & 0xFF;
+		data[4*i+4] = off >> 8;
+	}
+	i2cWrite(fd, _i2caddr, data, sizeof(data));	
 }
 
 /* Func: Customize I2C write with auto-increment property
@@ -51,14 +72,14 @@ void pca9685::set_pwm(int channel, int on, int off){
  * 
  * Return: -1 if fail
  */
-int pca9685::i2cWrite(int fd, int devid, char* data){	
+int pca9685::i2cWrite(int fd, int devid, char* data, int data_len){	
 	struct i2c_rdwr_ioctl_data msgset;
 	struct i2c_msg msg[1];
 	
 	msg[0].addr = devid;		// slave device address
 	msg[0].flags = 0;			// 0 means write
-	msg[0].len = sizeof(data)+1;  // len = data size + 1 because ioctl will add slave address (0x40) on it.
-	msg[0].buf = data;	
+	msg[0].len = data_len+1;  // len = data size + 1 because ioctl will add slave address (0x40) on it.
+	msg[0].buf = data;
 	
 	msgset.msgs = msg;
 	msgset.nmsgs = 1;
