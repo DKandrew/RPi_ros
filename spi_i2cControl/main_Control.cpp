@@ -36,9 +36,21 @@ uint16_t SPI_ctrl(int channel){
 
 //I2C control to three servos
 void I2C_ctrl(pca9685 *pwm, int pos1, int pos2, int pos3){
+	pwm->set_pwm(1,0,pos1);
+	/*
 	pwm->set_pwm(1,0,pos1); //Servo 1
 	pwm->set_pwm(2,0,pos2); //Servo 2
 	pwm->set_pwm(3,0,pos3); //Servo 3
+	pwm->set_pwm(4,0,pos1); //Servo 4
+	pwm->set_pwm(5,0,pos2); //Servo 5
+	pwm->set_pwm(6,0,pos3); //Servo 6
+	pwm->set_pwm(7,0,pos1); //Servo 7
+	pwm->set_pwm(8,0,pos2); //Servo 8
+	pwm->set_pwm(9,0,pos3); //Servo 9
+	pwm->set_pwm(10,0,pos1); //Servo 10
+	pwm->set_pwm(11,0,pos2); //Servo 11
+	pwm->set_pwm(12,0,pos3); //Servo 12
+	*/
 }
 
 int main(int argc, char**argv){
@@ -79,14 +91,17 @@ int main(int argc, char**argv){
 			inverse_kinematics(array, result);
 		}
 		// I2C Control 
-		/*
+		
 		pos1 = rand()%450 +150;		//Generate random number
 		pos2 = rand()%450 +150;
 		pos3 = rand()%450 +150;
-		*/
+		
+		/*
 		pos1 = 200;		//Generate random number
 		pos2 = 300;
 		pos3 = 400;
+		*/
+		
 		I2C_ctrl(&pwm, pos1, pos2, pos3);
 		// GPIO control
 		if(LED_ON == 0){

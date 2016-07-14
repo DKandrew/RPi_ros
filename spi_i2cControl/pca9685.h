@@ -7,6 +7,8 @@
 #include "wiringPiI2C.h"
 #include <math.h>
 #include <unistd.h>		// Time delay library
+#include <sys/ioctl.h>
+#include <linux/i2c-dev.h>	//i2c-tools library
 
 using namespace std;
 
@@ -39,4 +41,5 @@ class pca9685 {
 		void reset();
 		void set_pwm_freq(int freq_hz);
 		void set_pwm(int channel, int on, int off);
+		int i2cWrite(int fd, int devid, char* data);
 };

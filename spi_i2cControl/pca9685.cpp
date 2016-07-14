@@ -3,7 +3,7 @@
 
 // Func: Reset PCA9685 mode to 00
 void pca9685::reset(){
-	wiringPiI2CWriteReg8(fd, MODE1, 0x00);
+	wiringPiI2CWriteReg8(fd, MODE1, 0x20); //enable auto-increment
 	wiringPiI2CWriteReg8(fd, MODE2, 0x04);
 }
 
@@ -29,8 +29,42 @@ void pca9685::set_pwm_freq(int freq_hz){
 
 // Func: set pwm
 void pca9685::set_pwm(int channel, int on, int off){
-	wiringPiI2CWriteReg8(fd, LED0_ON_L+4*channel, on & 0xFF);
-	wiringPiI2CWriteReg8(fd, LED0_ON_H+4*channel, on >> 8);
-	wiringPiI2CWriteReg8(fd, LED0_OFF_L+4*channel, off & 0xFF);
-	wiringPiI2CWriteReg8(fd, LED0_OFF_H+4*channel, off >> 8);
+	
+	int dataSize = 4;
+	int servo_num = 1;		//servo_num
+	int chan = 0; 			//Channel 
+	char data[dataSize+1]; 	// dataSize + 1 because we need to include the starting register's address
+	data[0] = LED0_ON_L;
+	for(int i=0; i<servo_num; i++){
+		data[4*i+1] = on & 0xFF;
+		data[4*i+2] = on >> 8;
+		data[4*i+3] = off & 0xFF;
+		data[4*i+4] = off >> 8;
+	}
+	i2cWrite(fd, _i2caddr, data);	
+}
+
+/* Func: Customize I2C write with auto-increment property
+ * reg: the starting register address
+ * size: the size of data
+ * data: the data/command
+ * 
+ * Return: -1 if fail
+ */
+int pca9685::i2cWrite(int fd, int devid, char* data){	
+	struct i2c_rdwr_ioctl_data msgset;
+	struct i2c_msg msg[1];
+	
+	msg[0].addr = devid;		// slave device address
+	msg[0].flags = 0;			// 0 means write
+	msg[0].len = sizeof(data)+1;  // len = data size + 1 because ioctl will add slave address (0x40) on it.
+	msg[0].buf = data;	
+	
+	msgset.msgs = msg;
+	msgset.nmsgs = 1;
+	
+	int result = ioctl(fd, I2C_RDWR, &msgset);
+	if(result < 0)
+		cout << "Fail on executing i2cWrite" << endl;
+	return result;
 }
