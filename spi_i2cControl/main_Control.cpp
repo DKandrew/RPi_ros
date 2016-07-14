@@ -38,35 +38,6 @@ void I2C_ctrl(pca9685 *pwm, vector<int> & pos){
 	pwm->set_pwm(pos);
 }
 
-
-/*
-//I2C control to three servos
-void I2C_ctrl(pca9685 *pwm, int pos1, int pos2, int pos3){
-	int servo_num = 2;
-	int pos[servo_num];
-	pos[0] = pos1;
-	pos[1] = pos2;
-	pwm->set_pwm(pos);
-	
-	
-	//pwm->set_pwm(1,0,pos1);
-	
-	pwm->set_pwm(1,0,pos1); //Servo 1
-	pwm->set_pwm(2,0,pos2); //Servo 2
-	pwm->set_pwm(3,0,pos3); //Servo 3
-	pwm->set_pwm(4,0,pos1); //Servo 4
-	pwm->set_pwm(5,0,pos2); //Servo 5
-	pwm->set_pwm(6,0,pos3); //Servo 6
-	pwm->set_pwm(7,0,pos1); //Servo 7
-	pwm->set_pwm(8,0,pos2); //Servo 8
-	pwm->set_pwm(9,0,pos3); //Servo 9
-	pwm->set_pwm(10,0,pos1); //Servo 10
-	pwm->set_pwm(11,0,pos2); //Servo 11
-	pwm->set_pwm(12,0,pos3); //Servo 12
-	
-}
-*/
-
 int main(int argc, char**argv){
 	//Initialize ROS system
 	ros::init(argc, argv, "main_Control");
@@ -108,7 +79,7 @@ int main(int argc, char**argv){
 			inverse_kinematics(array, result);
 		}
 		// I2C Control 
-		
+		/* 
 		pos[0] = rand()%450 +150;		//Generate random number
 		pos[1] = rand()%450 +150;
 		pos[2] = rand()%450 +150;
@@ -121,7 +92,20 @@ int main(int argc, char**argv){
 		pos[9] = rand()%450 +150;		
 		pos[10] = rand()%450 +150;
 		pos[11] = rand()%450 +150;
-		/* */
+		*/
+		pos[0] = 200;
+		pos[1] = 300;
+		pos[2] = 400;
+		pos[3] = 500;	
+		pos[4] = 600;
+		pos[5] = 700;
+		pos[6] = 800;	
+		pos[7] = 900;
+		pos[8] = 1000;
+		pos[9] = 1100;	
+		pos[10] = 1200;
+		pos[11] = 1300;
+		
 		I2C_ctrl(&pwm, pos);
 		// GPIO control
 		if(LED_ON == 0){

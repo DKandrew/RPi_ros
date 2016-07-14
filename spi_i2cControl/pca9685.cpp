@@ -27,23 +27,6 @@ void pca9685::set_pwm_freq(int freq_hz){
   	wiringPiI2CWriteReg8(fd, MODE1, oldmode | 0x80);
 }
 
-// Func: set pwm
-void pca9685::set_pwm(int channel, int on, int off){
-	
-	int dataSize = 4;
-	int servo_num = 1;		//servo_num
-	int chan = 0; 			//Channel 
-	char data[dataSize+1]; 	// dataSize + 1 because we need to include the starting register's address
-	data[0] = LED0_ON_L;
-	for(int i=0; i<servo_num; i++){
-		data[4*i+1] = on & 0xFF;
-		data[4*i+2] = on >> 8;
-		data[4*i+3] = off & 0xFF;
-		data[4*i+4] = off >> 8;
-	}
-	//i2cWrite(fd, _i2caddr, data);	
-}
-
 // Func: set_pwm for all servo
 void pca9685::set_pwm(vector<int> & pos){
 	
@@ -54,7 +37,6 @@ void pca9685::set_pwm(vector<int> & pos){
 	char data[dataSize+1]; 	// dataSize + 1 because we need to include the starting register's address
 	data[0] = LED0_ON_L; 	// Start from LED0_ON_L address
 	//cout << "dataSize: " << dataSize << endl;
-	
 	for(int i=0; i<channel; i++){
 		int off = pos[i];
 		data[4*i+1] = on & 0xFF;

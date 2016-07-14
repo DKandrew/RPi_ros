@@ -41,7 +41,6 @@ class pca9685 {
 		// func
 		void reset();
 		void set_pwm_freq(int freq_hz);
-		void set_pwm(int channel, int on, int off);
 		int i2cWrite(int fd, int devid, char* data, int data_len);
 		void set_pwm(vector<int> & pos);
 };
