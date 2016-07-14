@@ -88,7 +88,7 @@ int main(int argc, char**argv){
 	int pos1, pos2, pos3;
 	srand(0);
 	//Servo position vector
-	int servo_num = 3;
+	int servo_num = 12;
 	vector<int> pos (servo_num);
 	//Set frequency to 60hz, good for servos
 	pwm.set_pwm_freq(60);
@@ -112,13 +112,16 @@ int main(int argc, char**argv){
 		pos[0] = rand()%450 +150;		//Generate random number
 		pos[1] = rand()%450 +150;
 		pos[2] = rand()%450 +150;
-		
-		/*
-		pos1 = 200;		//Generate random number
-		pos2 = 300;
-		pos3 = 400;
-		*/
-		
+		pos[3] = rand()%450 +150;		
+		pos[4] = rand()%450 +150;
+		pos[5] = rand()%450 +150;
+		pos[6] = rand()%450 +150;		
+		pos[7] = rand()%450 +150;
+		pos[8] = rand()%450 +150;
+		pos[9] = rand()%450 +150;		
+		pos[10] = rand()%450 +150;
+		pos[11] = rand()%450 +150;
+		/* */
 		I2C_ctrl(&pwm, pos);
 		// GPIO control
 		if(LED_ON == 0){

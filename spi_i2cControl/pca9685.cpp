@@ -78,9 +78,9 @@ int pca9685::i2cWrite(int fd, int devid, char* data, int data_len){
 	
 	msg[0].addr = devid;		// slave device address
 	msg[0].flags = 0;			// 0 means write
-	msg[0].len = data_len+1;  // len = data size + 1 because ioctl will add slave address (0x40) on it.
+	msg[0].len = data_len;  	// len = data size
 	msg[0].buf = data;
-	
+	//cout << "msg[0].len: " << msg[0].len << endl;
 	msgset.msgs = msg;
 	msgset.nmsgs = 1;
 	
