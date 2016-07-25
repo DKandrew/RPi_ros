@@ -43,9 +43,7 @@ int main(int argc, char**argv){
 	ros::init(argc, argv, "main_Control");
 	ros::NodeHandle nh;
 	//Frequency Control
-	int sampleRate;
-	cout << "Sample Rate is ? " << endl;
-	cin >> sampleRate;
+	int sampleRate = 20;
 	ros::Rate rate(sampleRate);
 	//Setup wiringPi SPI
 	int channel = 0;
@@ -57,54 +55,45 @@ int main(int argc, char**argv){
 	int addr = 0x40;
 	pca9685 pwm = pca9685(addr);
 	int pos1, pos2, pos3;
-	srand(0);
 	//Servo position vector
-	int servo_num = 12;
+	int servo_num = 3;
 	vector<int> pos (servo_num);
-	//Set frequency to 60hz, good for servos
-	pwm.set_pwm_freq(60);
+	//Set PWM frequency
+	pwm.set_pwm_freq(100);
 	//Setup GPIO
 	wiringPiSetup();
 	pinMode(7, OUTPUT);
 	int LED_ON = 0;
 	//Main
+	//int input0, input1;
+	//cout << "position of input0: "; cin >> input0;
+	double c_x,c_y,r,theta;
+	theta = 0;
+	cout << "position of center x: "; cin >> c_x;
+	cout << "position of center y: "; cin >> c_y;
+	cout << "Radius: "; cin >> r;
+	double x,y;
+	
+	//int bound = input0 +200;
 	while(ros::ok()){
 		//Read from SPI
 		int channel = 1;
 		uint16_t volt = SPI_ctrl(channel);
-		//Computer algorithm 5 times
-		for(int i=0; i<10; i++){
-			double array[3] = {1,2,3};
-			double result[3] = {0};
-			inverse_kinematics(array, result);
-		}
+		//Computer algorithm
+		x=c_x+r*cos(theta); y=c_y+r*sin(theta);
+		theta++;
+		double* temp_result=inverse_kinematics(x,y);
+		int* result = angle2PWM(temp_result[0], temp_result[1]);
 		// I2C Control 
-		/* 
-		pos[0] = rand()%450 +150;		//Generate random number
-		pos[1] = rand()%450 +150;
-		pos[2] = rand()%450 +150;
-		pos[3] = rand()%450 +150;		
-		pos[4] = rand()%450 +150;
-		pos[5] = rand()%450 +150;
-		pos[6] = rand()%450 +150;		
-		pos[7] = rand()%450 +150;
-		pos[8] = rand()%450 +150;
-		pos[9] = rand()%450 +150;		
-		pos[10] = rand()%450 +150;
-		pos[11] = rand()%450 +150;
-		*/
-		pos[0] = 200;
-		pos[1] = 300;
-		pos[2] = 400;
-		pos[3] = 500;	
-		pos[4] = 600;
-		pos[5] = 700;
-		pos[6] = 800;	
-		pos[7] = 900;
-		pos[8] = 1000;
-		pos[9] = 1100;	
-		pos[10] = 1200;
-		pos[11] = 1300;
+		//cout << "position of input1: "; cin >> input1;
+		//cout << "Theta1:  " << result[0]; cout << "Theta2:  " << result[1]; 
+		pos[0] = 0;
+		pos[1] = result[1];
+		pos[2] = result[0];
+		//if(input0 <bound){
+			//input0 += 10;
+			//cout << "input0 = " << input0 << endl;
+		//}
 		
 		I2C_ctrl(&pwm, pos);
 		// GPIO control

@@ -30,7 +30,11 @@ void pca9685::set_pwm_freq(int freq_hz){
 // Func: set_pwm for all servo
 void pca9685::set_pwm(vector<int> & pos){
 	
-	int on = 0;
+	//if(pos.size() != on.size()){
+		//cout << "Error: pos.size != on.size" << endl;
+		//return;
+	//}
+	int on = 0x0;
 	int channel = pos.size(); 	//Channel is the number of servo we control.
 	int dataSize = 4*channel;
 	//cout << "channel: " << channel << endl;

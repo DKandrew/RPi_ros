@@ -2,14 +2,13 @@
  * I2C communication between Raspberry Pi and PCA9685 
  */
 
-// Import module
-//PyObject *pModule = PyImport_Import(PyString_FromString("algorithm.py"));
-
 #include <stdlib.h>
 #include <math.h>
 
-void inverse_kinematics(double* p, double* result);
+double* forward_kinematics(double theta1, double theta2);
+
+double* inverse_kinematics(double x, double y);
 
 double radiansToServoPosition(double theta);
 
-
+int* angle2PWM(double theta1, double theta2);
