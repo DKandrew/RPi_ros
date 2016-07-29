@@ -13,7 +13,6 @@ double l6 = 1.97;
 // Forward Kinematics algorithm. Receive input of two angles 
 // and output an array containing the x,y position of endeffector.
 double* forward_kinematics(double theta1, double theta2){
-	
 	// Calculate length1 (distance from origin to d) 
 	// and length2 (distance from b to d)
 	double Yd = l2*cos(theta2); // Yd is the y value of point d.
@@ -40,13 +39,19 @@ double* forward_kinematics(double theta1, double theta2){
 	temp = (length3*length3 + l4*l4 - l3*l3)/(2*length3*l4);
 	double boa = acos(temp);
 	// Calculate (x,y) at point a
-	double ko2a = boa + theta1;
-	double Xa = -length3*cos(ko2a);
-	double Ya = length3*sin(ko2a);
+	double koa = boa + theta1;
+	double Xa = -length3*cos(koa);
+	double Ya = length3*sin(koa);
 	// Calculate (x,y) at point p
-	double apg = abo - theta1;
-	double ag = l5*sin(apg); double pg = l5*cos(apg);
-	double Xp = Xa-pg; double Yp = Ya-ag;
+	double slope_ab = (Ya-Yb)/(Xa-Xb);
+	double constant_line_ab = Yb - slope_ab*Xb;
+	double slope_angle;
+	if(slope_ab < 0) // The angle of slope_ab
+		slope_angle = PI-atan(slope_ab);
+	else
+		slope_angle = atan(slope_ab);
+	double Xp = Xa-l5*cos(slope_angle);
+	double Yp = slope_ab*Xp + constant_line_ab;
 	// Return result;
 	static double p[2];
 	p[0]=Xp; p[1]=Yp;
@@ -73,13 +78,36 @@ double* inverse_kinematics(double x, double y){
 	double pbc = acos(((l5-l3)*(l5-l3)+l4*l4-pc*pc)/(2*(l5-l3)*l4));
 	double theta3 = PI - angle[0] - pbc;
 	// Calculate the second angle: theta
-	double temp1 = x+l5*cos(theta3)-l6; double temp2 = y+l5*sin(theta3);
-	double temp3 = -(l1*l1-l2*l2-temp1*temp1-temp2*temp2)/(2*l2);
-	double beta = asin(temp2/sqrt(temp1*temp1+temp2*temp2)); // The angle of the beta 
+	double a = x+l5*cos(theta3)-l6; double b = y+l5*sin(theta3); // a = cos(beta), b = sin(beta)
+	double temp3 = -(l1*l1-l2*l2-a*a-b*b)/(2*l2); // The constant sum on the right side of equation
+	double beta = asin(b/sqrt(a*a+b*b));
+	if(a < 0){
+		beta = PI - beta; // if a < 0, means cos(beta) < 0. THen beta should be PI - current beta
+	}
+	double angle_sum = asin(temp3/sqrt(a*a+b*b));
+	double candidate1, candidate2; // Two candidates of theta2
+	double finalValue = 0; // Final value of theta2
+	candidate1 = angle_sum-beta; candidate2 = PI-angle_sum-beta; // 2 case: Either = (PI - angle_sum) - beta, or = angle_sum-beta
+	// Pass into forward kinematic algorithm to find out which candidate is correct 
+	/*
+	double* result = forward_kinematics(angle[0], candidate1);
+	if(result != NULL){
+		bool x_diff = result[0]-x > -0.00001 && result[0]-x < 0.00001; bool y_diff = result[1]-y > -0.00001 && result[1]-y < 0.00001;
+		if(x_diff && y_diff){
+			finalValue = candidate1;
+		}
+	}
+	result = forward_kinematics(angle[0], candidate2);
+	if(result != NULL){
+		bool x_diff = result[0]-x > -0.00001 && result[0]-x < 0.00001; bool y_diff = result[1]-y > -0.00001 && result[1]-y < 0.00001;
+		if(x_diff && y_diff){
+			finalValue = candidate2;
+		}
+	}
+	*/
+	finalValue = candidate2;
+	angle[1] = finalValue;
 	
-	double temp_angle_2 = asin(temp3/sqrt(temp1*temp1+temp2*temp2)); // The angle of the sum: theta + beta
-	
-	angle[1] = beta-temp_angle_2; 
 	return angle;
 }
 

@@ -6,8 +6,9 @@
 #include <wiringPiSPI.h>
 #include <stdlib.h>
 
-using namespace std; 
+#define PI 3.14159265
 
+using namespace std; 
 
 // Helper function: convert data into voltage
 // Input: array to be converted
@@ -43,7 +44,7 @@ int main(int argc, char**argv){
 	ros::init(argc, argv, "main_Control");
 	ros::NodeHandle nh;
 	//Frequency Control
-	int sampleRate = 20;
+	int sampleRate = 90;
 	ros::Rate rate(sampleRate);
 	//Setup wiringPi SPI
 	int channel = 0;
@@ -73,27 +74,22 @@ int main(int argc, char**argv){
 	cout << "position of center y: "; cin >> c_y;
 	cout << "Radius: "; cin >> r;
 	double x,y;
-	
-	//int bound = input0 +200;
+
 	while(ros::ok()){
 		//Read from SPI
 		int channel = 1;
 		uint16_t volt = SPI_ctrl(channel);
 		//Computer algorithm
-		x=c_x+r*cos(theta); y=c_y+r*sin(theta);
-		theta++;
+		x=c_x; y=c_y+r*sin(theta); 
+		theta += PI/180;
 		double* temp_result=inverse_kinematics(x,y);
 		int* result = angle2PWM(temp_result[0], temp_result[1]);
+		cout << "x: " << x << " y: " << y << endl;
 		// I2C Control 
-		//cout << "position of input1: "; cin >> input1;
-		//cout << "Theta1:  " << result[0]; cout << "Theta2:  " << result[1]; 
 		pos[0] = 0;
 		pos[1] = result[1];
 		pos[2] = result[0];
-		//if(input0 <bound){
-			//input0 += 10;
-			//cout << "input0 = " << input0 << endl;
-		//}
+		
 		
 		I2C_ctrl(&pwm, pos);
 		// GPIO control
