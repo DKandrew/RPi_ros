@@ -86,7 +86,7 @@ int main(int argc, char**argv){
 		int* result = angle2PWM(temp_result[0], temp_result[1]);
 		cout << "x: " << x << " y: " << y << endl;
 		// I2C Control 
-		pos[0] = 0;
+		pos[0] = 720;
 		pos[1] = result[1];
 		pos[2] = result[0];
 		

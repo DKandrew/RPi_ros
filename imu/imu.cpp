@@ -63,6 +63,11 @@ float* readMeasurement_imu(int channel){
 
 int readEncoder(int channel){
 	int dataLen = 2;
+	unsigned char data[dataLen] = {0xff, 0xff};
+	wiringPiSPIDataRW(channel, data, dataLen);
+	int EncReading = (((unsigned int) (data[0] & 0x7f)) << 6) + (((unsigned int) (data[1] & 0xf8)) >> 2);
+	printf("[0]: %x, [1]: %x \n", data[0], data[1]);
+	return EncReading;
 }
 
 int main(int argc, char** argv){
@@ -85,6 +90,15 @@ int main(int argc, char** argv){
 		cout << "wiringPi SPI setup error " << endl;
 		return -1;
 	}
+	//Open channel 1 for encoder
+	/*
+	channel = 1;
+	spi_mode = 2;
+	if(wiringPiSPISetupMode(channel,spi_freq,spi_mode) == -1){
+		cout << "wiringPi SPI setup error " << endl;
+		return -1;
+	}
+	*/
 	//Setup IMU
 	int channel_imu = 0;
 	unsigned char* reset_result = reset_imu(channel_imu);
@@ -92,39 +106,20 @@ int main(int argc, char** argv){
 	uint8_t* setoutconfig_result = SetOutputConfiguration(channel_imu);
 	uint8_t* measure_result = measurement_imu(channel_imu);
 	//Main
-	/*
-	cout << "Reset: ";
-	for(int i=0; i<7; i++){
-			printf("%04x, ", reset_result[i]);
-	}
-	cout << endl;
-	
-	cout << "Config: ";
-	for(int i=0; i<7; i++){
-			printf("%04x, ", config_result[i]);
-	}
-	cout << endl;
-	
-	cout << "SetConfig: ";
-	for(int i=0; i<11; i++){
-			printf("%04x, ", setoutconfig_result[i]);
-	}
-	cout << endl;
-	
-	cout << "Measurement: ";
-	for(int i=0; i<7; i++){
-			printf("%04x, ", measure_result[i]);
-	}
-	cout << endl;
-	*/
-	
 	float* result; 
 	
 	while(ros::ok()){
+		//imu
+		/*
 		double currTime = ros::Time::now().toSec();
 		result = readMeasurement_imu(channel_imu);
 		double interval = ros::Time::now().toSec() - currTime;
 		printf("Time interval: %f", interval); 
+		*/
+		//encode
+		int EncChannel = 0;
+		int EncReading = readEncoder(EncChannel);
+		cout << EncReading << endl;
 		/*
 		unsigned char test = 0xc1;
 		printf("%x \n", test);
