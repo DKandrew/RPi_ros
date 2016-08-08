@@ -84,21 +84,19 @@ int main(int argc, char** argv){
 	//	SPI_MODE3 = 3,  // CPOL = 1, CPHA = 1, Clock idle high, data is clocked in on rising, edge output data (change) on falling edge
 	int channel = 0; // Pi has 2 channels: 0 and 1
 	int spi_freq = 1000000;
-	int spi_mode = 3; 	// SPI_MODE = 0 -> CPOL = 0, CPHA = 0.
-						// IMU needs PL=1, PH=0. // Encoder needs PL=1, PH=1.
+	int spi_mode = 3; // IMU needs mode3. // Encoder works for all the modes. (in mode 0, it reads different value.)
 	if(wiringPiSPISetupMode(channel,spi_freq,spi_mode) == -1){
 		cout << "wiringPi SPI setup error " << endl;
 		return -1;
 	}
 	//Open channel 1 for encoder
-	/*
 	channel = 1;
-	spi_mode = 2;
+	spi_mode = 3;
 	if(wiringPiSPISetupMode(channel,spi_freq,spi_mode) == -1){
 		cout << "wiringPi SPI setup error " << endl;
 		return -1;
 	}
-	*/
+	
 	//Setup IMU
 	int channel_imu = 0;
 	unsigned char* reset_result = reset_imu(channel_imu);
@@ -117,7 +115,7 @@ int main(int argc, char** argv){
 		printf("Time interval: %f", interval); 
 		*/
 		//encode
-		int EncChannel = 0;
+		int EncChannel = 1;
 		int EncReading = readEncoder(EncChannel);
 		cout << EncReading << endl;
 		/*
