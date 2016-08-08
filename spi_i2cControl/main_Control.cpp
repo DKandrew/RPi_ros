@@ -81,15 +81,14 @@ int main(int argc, char**argv){
 		uint16_t volt = SPI_ctrl(channel);
 		//Computer algorithm
 		x=c_x; y=c_y+r*sin(theta); 
-		theta += PI/180;
+		theta += 2.5*PI/180;
 		double* temp_result=inverse_kinematics(x,y);
 		int* result = angle2PWM(temp_result[0], temp_result[1]);
 		cout << "x: " << x << " y: " << y << endl;
 		// I2C Control 
-		pos[0] = 720;
+		pos[0] =720;
 		pos[1] = result[1];
 		pos[2] = result[0];
-		
 		
 		I2C_ctrl(&pwm, pos);
 		// GPIO control
