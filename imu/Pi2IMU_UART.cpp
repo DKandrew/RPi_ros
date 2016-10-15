@@ -14,6 +14,7 @@ int writeData(int fd, char *data, int dataLen){
 	return result;
 }
 
+//To compile: g++ Pi2IMU_UART.cpp -Wall -o uart -lwiringPi 
 int main(){
 	int baud = 115200;	//baud rate
 	int fd = serialOpen("/dev/ttyS0",baud);
@@ -37,23 +38,15 @@ int main(){
 	
 	
 	while(1){
-		/*
-		char tData[] = {0xFA, 0xFF, 0x00, 0x00, 0x01};
-		writeData(fd, tData, 5);
+		////This code is used to capture signal in oscilloscope.
 		//writeData(fd, data_2config, 5);
-		delay(10);
-		*/
+		//delay(5);
+		//writeData(fd, data_setConfig, 17);
+		//delay(10);
+		//writeData(fd, data_2meas, 5);
+		//delay(20);
+		
 		/*
-		int len = 10;
-		char temp[len];
-		
-		if(serialDataAvail(fd)){
-			int a = read(fd, (void*)temp, len);
-			temp[a] = '\0';
-			printf("%i bytes read: %s\n", a, temp);
-		}
-		*/
-		
 		//Flags for detecting FA, FF signal
 		int fa=0; 
 		char temp[1];
@@ -61,13 +54,7 @@ int main(){
 		if(temp[0] == 0xFA){
 			fa = 1;
 		}
-		/*
-		read(fd, (void*)temp, 1);
-		if(fa && temp[0] == 0xFF){
-			ff = 1;
-			cout << "Find" << endl;
-		}
-		*/
+		
 		//If we find a sequence of FA FF, we find the starting of signal. Start reading
 		if(fa){ 
 			int i = 0;
@@ -106,61 +93,8 @@ int main(){
 		
 			printf("x: %f, y: %f, z: %f | ax: %f, ay: %f, az: %f | wx: %f, wy: %f, wz: %f \n", x, y, z, ax, ay, az, wx, wy, wz); 
 			
-			
-		}
-		/*
-		cout << "x: " << x "y: " << y << endl;
-			cout << "z: " << z << endl;
-			cout << "acc: " << x << endl;
-			cout << "y: " << y << endl;
-			cout << "z: " << z << endl;
-			cout << "x: " << x << endl;
-			cout << "y: " << y << endl;
-			cout << "z: " << z << endl;
-			* printf("\n", ax, ay, az);
-			printf("wx: %f, wy: %f, wz: %f \n", wx, wy, wz);
-		*/
-		
-		
-		
-		/*
-		int dataAvail = serialDataAvail(fd);
-		if(dataAvail > 0){
-			int imuData[dataAvail];
-			for(int i=0; i<dataAvail; i++){
-				imuData[i] = serialGetchar(fd);
-			}
-			long roll_angle = ((long)imuData[9]<<24) | ((long)imuData[10]<<16) | ((long)imuData[11]<<8) | (long)imuData[12];
-			long pitch_angle  = ((long)imuData[13]<<24) | ((long)imuData[14]<<16) | ((long)imuData[15]<<8) | (long)imuData[16];  
-			long yaw_angle = ((long)imuData[17]<<24) | ((long)imuData[18]<<16) | ((long)imuData[19]<<8) | (long)imuData[20];
-			
-			float x =  *((float*)&roll_angle);
-			float y =  *((float*)&pitch_angle);
-			float z =  *((float*)&yaw_angle);
-			cout<<"Data Len " << dataAvail << endl; 
-			std::cout << "x: " << x << std::endl;
-			std::cout << "y: " << y << std::endl;
-			std::cout << "z: " << z << std::endl;
 		}
 		*/
-		
-		
-
-		//int count = read(fd, (void*)buffer, bufferLen);
-		
-		/*
-		int dataAvail = serialDataAvail(fd);
-		int count = 0; 
-		while(dataAvail){
-			serialGetchar(fd);
-			count++;
-			dataAvail = serialDataAvail(fd);
-			
-		}
-		*/
-		
-		
-		
 	}
 	serialClose(fd);
 }
