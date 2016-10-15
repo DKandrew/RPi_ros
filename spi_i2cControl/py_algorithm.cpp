@@ -10,6 +10,19 @@ double l4 = 11.4;
 double l5 = 13.08+l3;
 double l6 = 1.97;
 
+
+double mult = 180/PI;
+double L1 = 11.75;
+double L2 = 2.9;
+double L3 = 14.4;
+double L4 = 2.65;
+double L5 = 16.15;
+double Lf = 1.65;
+double offset = 15;
+double qf = offset*(PI/180);
+
+
+/*
 // Forward Kinematics algorithm. Receive input of two angles 
 // and output an array containing the x,y position of endeffector.
 double* forward_kinematics(double theta1, double theta2){
@@ -57,7 +70,9 @@ double* forward_kinematics(double theta1, double theta2){
 	p[0]=Xp; p[1]=Yp;
 	return p;
 }
+*/
 
+/*
 // Inverse Kinematics algorithm. Receive input of x, y position of endeffector
 // and output an array of two angles: theta1, theta2
 double* inverse_kinematics(double x, double y){
@@ -105,11 +120,180 @@ double* inverse_kinematics(double x, double y){
 		}
 	}
 	*/
+	/*
 	finalValue = candidate2;
 	angle[1] = finalValue;
 	
 	return angle;
 }
+
+*/
+
+
+//Written by Won Dong======================================================================
+double* forward_kinematics(double q1, double q2)
+{
+	//Get positions of P4, P02, and P2
+	double P4x = L1*cos(q1);
+	double P4y = L1*sin(q1);
+	double P02x = Lf*cos(qf);
+	double P02y = Lf*sin(qf);
+	
+	double P2x = P02x + L2*cos(q2);
+	double P2y = P02y + L2*sin(q2);
+	
+	//Theta5
+	double P0P2 = sqrt( P2x*P2x + P2y*P2y );
+	double P2P4 = sqrt( (P4x - P2x)*(P4x - P2x) + (P4y - P2y)*(P4y - P2y) );
+	double alpha = acos_calc(L1, P2P4, P0P2);
+	double alpha0 = acos_calc(L4, P2P4, L3);
+	double q5 = PI - (alpha + alpha0);
+	
+	//Theta4
+	double beta0 = acos_calc(L3, P2P4, L4);
+	double q4 = alpha0 + beta0;
+	
+	//Theta3
+	double P0P3 = length_calc(L1, L4, alpha + alpha0);
+	double gamma = acos_calc(L3, P0P3, P0P2);
+	double gamma0 = PI - q4 - gamma;
+	double gamma1 = q5 - gamma0;
+	double gamma2 = q1 - gamma1;
+	double P3x = P0P3*cos(gamma2);
+	double P3y = P0P3*sin(gamma2);
+	double P02P3 = sqrt( (P3x - P02x)*(P3x - P02x) + (P3y - P02y)*(P3y - P02y)  );
+	double gamma3 = acos_calc(L3, L2, P02P3);
+	double q3 = PI - gamma3;
+	
+	//Position
+	double q4abs = q2 + q3 + q4;
+	double p1x = L1*cos(q1);
+	double p1y = L1*sin(q1);
+	double p5x = p1x + (L5-L4)*cos(q4abs);
+	double p5y = p1y + (L5-L4)*sin(q4abs);	
+	
+	//Return Results
+	static double rtn[5];
+	rtn[0]=p5x; 
+	rtn[1]=p5y;
+	rtn[2]=q3; 
+	rtn[3]=q4;
+	rtn[4]=q5; 
+
+	return rtn;
+}
+
+
+double* inverse_kinematics(double x, double y){
+	// Return value
+	static double angle[2];
+	// Calculate theta5
+	double Lp = sqrt(x*x+y*y); // The distance from origin to p
+	double q5 = acos_calc(L1, L5-L4, Lp);
+
+	// Calculate theta1
+	double alpha = PI - q5;
+	double P0P3 = length_calc(L1, L4, alpha);
+	double beta = acos_calc(L1, Lp, L5-L4);
+	double gamma = atan(y/x);
+	double q1 = PI + gamma - beta;	
+
+ 	// Calculate theta2
+	double psi = acos_calc(P0P3, L5, Lp);
+	double xi = q1 - q5;
+	double a = L5*cos(xi);
+	double b = L5*sin(xi);
+	double P3x = a + x;
+	double P3y = b + y;
+	double P02x = Lf*cos(qf);
+	double P02y = Lf*sin(qf);
+	double P02P3 = sqrt((P3x - P02x)*(P3x - P02x) + (P3y - P02y)*(P3y - P02y));
+	double delta1 = acos_calc(P02P3, Lf, P0P3);
+	double delta2 = acos_calc(P02P3, L2, L3);
+	double q2 = PI - ((delta1 - qf) + delta2);	
+		
+	// Calculate theta4
+	double P2x = P02x + L2*cos(q2);
+	double P2y = P02y + L2*sin(q2);
+	double P0P2 = sqrt(P2x*P2x + P2y*P2y);
+	double psi0 = acos_calc(P0P3, L3, P0P2);
+	double q4 = PI - (psi + psi0);
+
+	//Calculate theta3
+	double q3 = PI - acos_calc(L3, L2, P02P3);
+
+	//Convert Unit from rad to degree
+		
+	alpha *= mult;	//
+	beta *= mult;	//
+	gamma *= mult;	//
+	delta1 *= mult;	//
+	delta2 *= mult;	//
+	psi *= mult;	//
+	psi0 *= mult;	//
+	xi *= mult;		//
+	
+	//q1 *= mult;		//
+	//q2 *= mult;		//
+	q3 *= mult;		//
+	q4 *= mult;		//
+	q5 *= mult;		//
+	
+	/*
+	angle[0] = q5;
+	angle[1] = alpha;
+	angle[2] = beta;
+	angle[3] = gamma;
+	angle[4] = q1;
+	angle[5] = psi;
+	angle[6] = xi;
+	angle[7] = a;
+	angle[8] = b;
+	angle[9] = delta1;
+	angle[10] = delta2;
+	angle[11] = q2;
+	angle[12] = psi0;
+	angle[13] = q4;
+	angle[14] = q5;
+	*/
+	
+	q1 -= qf;	//Delete this line when Servo2 is placed horizontally 
+	q2 -= qf;	//Delete this line when Servo1 is placed horizontally 
+	angle[0] = q1;
+	angle[1] = q2;
+	
+	return angle;
+	
+}
+
+
+double acos_calc(double len1, double len2, double len3)
+{
+	double rtn = acos(( len1*len1 + len2*len2 - len3*len3) / (2*len1*len2));
+	return rtn;
+}
+
+double length_calc(double len1, double len2, double angle)
+{
+	double rtn = sqrt( len1*len1 + len2*len2 - 2*len1*len2*cos(angle) );
+	return rtn;
+}
+
+double* angle_temp_correction(double angle1, double angle2)
+{
+	static double rtn[2];
+	rtn[0] = PI - angle1;
+	rtn[1] = (PI/2) - angle2;
+	return rtn;
+
+}
+
+//End of Written by Wondong===============================================
+
+
+
+
+
 
 double radiansToServoPosition(double theta){
     return (theta+1.3962634)*161.14437988+150;
@@ -124,7 +308,7 @@ int* angle2PWM(double theta1, double theta2){
 	// Translate theta1
 	int max_theta1 = 1000; // The maximum position theta1 can reach
 	int min_theta1 = 450; // The minimum position theta1 can reach
-	angle[0] = 2.629*t1+665;
+	angle[0] = 2.629*t1+665;  //1000-450
 	if(angle[0] < min_theta1)
 		angle[0] = min_theta1;
 	else if (angle[0] > max_theta1)

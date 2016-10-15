@@ -72,10 +72,6 @@ int main(int argc, char**argv){
 	//cout << "position of center y: "; cin >> c_y;
 	//cout << "Radius: "; cin >> r;
 	double x,y;
-	int up = 0;	//I added
-	x = -8;	//I added
-	y = -5;	//I added
-	double increment = 0.5;
 
 	while(ros::ok()){
 		//Read from SPI
@@ -86,63 +82,24 @@ int main(int argc, char**argv){
 		
 		//------------------------------------------------------------------
 		//Computer algorithm
-		/*
-		x=c_x; y=c_y+r*sin(theta); 
-		theta += 10*PI/180;
+	
+		//x=c_x; y=c_y+r*sin(theta); 
+		x = -10;
+		y = -5;
+		//theta += 10*PI/180;
 		double* temp_result=inverse_kinematics(x,y);
 		int* result = angle2PWM(temp_result[0], temp_result[1]);
-		cout << "x: " << x << " y: " << y << " theta: "<<theta<< endl;
+		cout << "x: " << x << " y: " << y << endl;
+		cout << "Theta1: " << temp_result[0] << " Theta2: " << temp_result[1] << endl;
 		// I2C Control 
 		pos[0] =720;
 		pos[1] = result[1]; //Port 1 connects to B servo 
 		pos[2] = result[0]; //Port 2 connects to A servo 
 		
 		I2C_ctrl(&pwm, pos);
-		//-------------------------------------------------------------------
-		*/
-		//End of Original working code
-		
-		
-		//My New Code===============================
-		
-		if(y < -19)
-			up = 1;		//Go Up
-		if(y > -10)
-			up = 0;		//Go Down
-			
-		if(up)
-			y += increment;
-		else
-			y -= increment;
-		
-		
-		//x = -8; y = -10;
-		double* temp_result = inverse_kinematics(x, y);
-		//cout << "Rsult================= " << endl;
-		//cout << "q5: " << temp_result[0] << " alpha: " << temp_result[1] << " beta: "<<temp_result[2] << " gamma: "<<temp_result[3] << " q1: "<<temp_result[4] << endl;
-		//cout << "psi: " << temp_result[5] << " xi: " << temp_result[6] << " a: "<<temp_result[7] << " b: "<<temp_result[8] << " delta1: "<<temp_result[9] << endl;
-		//cout << "delta2: " << temp_result[10] << " q2: " << temp_result[11] << " phi0: "<<temp_result[12] << " q4: "<<temp_result[13] << " q3: "<<temp_result[14] << endl;
-		cout << "q1: " << temp_result[0] << " q2: " << temp_result[1] << endl;
-		temp_result = angle_temp_correction(temp_result[0], temp_result[1]);
-		//cout << "Corrected q1: " << temp_result[0] << " Corrected q2: " << temp_result[1] << endl;
-		//double* forward = forward_kinematics(temp_result[0], temp_result[1]);
-		//cout << "P5x: " << forward[0] << " P5y: " << forward[1] << endl;
-		
-		
-		int* result = angle2PWM(temp_result[0], temp_result[1]);
-		pos[0] =720;
-		pos[1] = result[1]; //Port 1 connects to B servo 
-		pos[2] = result[0]; //Port 2 connects to A servo		
-		
-		I2C_ctrl(&pwm, pos);
-		if(y < -19)
-			ros::Duration(1).sleep();
-		
+		ros::Duration(5).sleep();
 	
-		
-		//End of My New Code=======================
-		
-		
+			
 		// GPIO control
 		if(LED_ON == 0){
 			LED_ON = 1;
