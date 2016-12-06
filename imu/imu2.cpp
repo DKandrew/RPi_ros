@@ -5,16 +5,16 @@
 #include <sstream>
 #include <string>
 using namespace std;
-
+/*
 std::string Convert (float number){
 		std::ostringstream buff;
 		buff<<number;
 		return buff.str();
 }
-
-void notification_pip(int channel){
-	int dataLen = 7;
-	uint8_t data[dataLen] = {0x05, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00};
+*/
+void notification_pip(int channel , int dataLen){
+	uint8_t data[dataLen];
+	data[0]=0x05;
 	wiringPiSPIDataRW(channel, data, dataLen); 
 }
 
@@ -35,26 +35,42 @@ void config_imu(int channel){
 void SetOutputConfiguration(int channel){
 	//int dataLen = 11;
 	//int dataLen = 15;
-	int dataLen = 19;
-	/*
-	uint8_t data[dataLen] = {0x03, 0x00, 0x00, 0x00,
-							 0xc0, 0x04, 0x20, 0x30,
-							 0x00, 0x64, 0x89};
-	*/
-	/*
-	uint8_t data[dataLen] = {0x03, 0x00, 0x00, 0x00,
-							 0xc0, 0x08, 0x40, 0x20,
-							 0x00, 0x64, 0x80, 0x20,
-							 0x00, 0x64, 0x71};
-	*/
 	
-	uint8_t data[dataLen] = {0x03, 0x00, 0x00, 0x00,
+	uint8_t data6[15] = {0x03, 0x00, 0x00, 0x00,
+							 0xc0, 0x08, 0x40, 0x40,
+							 0x03, 0xE8, 0x80, 0x40,
+							 0x03, 0xE8, 0x23};
+	
+	
+	
+	uint8_t data5[19] = {0x03, 0x00, 0x00, 0x00,
 							 0xc0, 0x0c, 0x20, 0x30,
 							 0x00, 0x64, 0x40, 0x20,
 							 0x00, 0x64, 0x80, 0x20,
 							 0x00, 0x64, 0xb9};
 	
-	wiringPiSPIDataRW(channel, data, dataLen);
+	
+	 uint8_t data4[19] = {0x03, 0x00, 0x00, 0x00,
+							 0xc0, 0x0c, 0x20, 0x30,
+							 0x00, 0x64, 0x40, 0x40,
+							 0x03, 0xE8, 0x80, 0x40,
+							 0x03, 0xE8, 0x6B};
+	
+	
+	unsigned char data1[11] = {0x03, 0x00, 0x00, 0x00,
+							 0xc0, 0x04, 0x40, 0x40,
+							 0xFF, 0xFF, 0xBF};
+	     unsigned char data2[11] = {0x03, 0x00, 0x00, 0x00,
+							 0xc0, 0x04, 0x40, 0x20,
+							 0x00, 0x64, 0x79};
+				unsigned char data7[11] = {0x03, 0x00, 0x00, 0x00,
+							 0xc0, 0x04, 0x80, 0x40,
+							 0x03, 0xE8, 0x92};	
+     unsigned char data3[11] = {0x03, 0x00, 0x00, 0x00,
+							 0xc0, 0x04, 0x40, 0x40,
+							 0x03, 0xE8, 0xD2};
+	 int dataLen = 11;
+	wiringPiSPIDataRW(channel, data7, dataLen);
 }
 
 void measurement_imu(int channel){
@@ -65,47 +81,53 @@ void measurement_imu(int channel){
 	wiringPiSPIDataRW(channel, data, dataLen); 
 }
 
-float* readMeasurement_imu(int channel){
-	int dataLen = 51;
-	//int dataLen = 21;
-	unsigned char data[dataLen] = {
-								0x06, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-								0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-								0x00,
-								0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-								0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,  
-								0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 
-								};
+float* readMeasurement_imu(int channel, int dataLen){
+	unsigned char data[dataLen] = {0x00};
+	data[0]=0x06;
+
 	wiringPiSPIDataRW(channel, data, dataLen);
-	
+	/*
 	long roll_angle = ((long)data[9]<<24) | ((long)data[10]<<16) | ((long)data[11]<<8) | (long)data[12];
 	long pitch_angle  = ((long)data[13]<<24) | ((long)data[14]<<16) | ((long)data[15]<<8) | (long)data[16];  
 	long yaw_angle = ((long)data[17]<<24) | ((long)data[18]<<16) | ((long)data[19]<<8) | (long)data[20];
-	
 	long acc_x = ((long)data[24]<<24) | ((long)data[25]<<16) | ((long)data[26]<<8) | (long)data[27];
 	long acc_y = ((long)data[28]<<24) | ((long)data[29]<<16) | ((long)data[30]<<8) | (long)data[31];
 	long acc_z = ((long)data[32]<<24) | ((long)data[33]<<16) | ((long)data[34]<<8) | (long)data[35];
-	
 	long w1 = ((long)data[39]<<24) | ((long)data[40]<<16) | ((long)data[41]<<8) | (long)data[42];
 	long w2 = ((long)data[43]<<24) | ((long)data[44]<<16) | ((long)data[45]<<8) | (long)data[46];
 	long w3 = ((long)data[47]<<24) | ((long)data[48]<<16) | ((long)data[49]<<8) | (long)data[50];
-	
 	float x =  *((float*)&roll_angle);
 	float y =  *((float*)&pitch_angle);
 	float z =  *((float*)&yaw_angle);
-	
 	float ax = *((float*)&acc_x);
 	float ay = *((float*)&acc_y);
 	float az = *((float*)&acc_z);
 	float wx = *((float*)&w1);
 	float wy = *((float*)&w2);
 	float wz = *((float*)&w3);
+	* 
+	 float result[9] = {x,y,z,ax,ay,az,wx,wy,wz};
+	*/
+
+	long acc_x = ((long)data[9]<<24) | ((long)data[10]<<16) | ((long)data[11]<<8) | (long)data[12];
+	long acc_y  = ((long)data[13]<<24) | ((long)data[14]<<16) | ((long)data[15]<<8) | (long)data[16];  
+	long acc_z = ((long)data[17]<<24) | ((long)data[18]<<16) | ((long)data[19]<<8) | (long)data[20];
+	//long w1 = ((long)data[24]<<24) | ((long)data[25]<<16) | ((long)data[26]<<8) | (long)data[27];
+	//long w2 = ((long)data[28]<<24) | ((long)data[29]<<16) | ((long)data[30]<<8) | (long)data[31];
+	//long w3 = ((long)data[32]<<24) | ((long)data[33]<<16) | ((long)data[34]<<8) | (long)data[35];
+	float ax = *((float*)&acc_x);
+	float ay = *((float*)&acc_y);
+	float az = *((float*)&acc_z);
+	//float wx = *((float*)&w1);
+	//float wy = *((float*)&w2);
+	//float wz = *((float*)&w3);
+	float result[3] = {ax,ay,az};
 	
-	float result[9] = {x,y,z,ax,ay,az,wx,wy,wz};
 
 	return result;
 }
 
+/*
 int readEncoder(int channel){
 	int dataLen = 2;
 	unsigned char data[dataLen] = {0xff, 0xff};
@@ -113,14 +135,13 @@ int readEncoder(int channel){
 	int EncReading = (((unsigned int) (data[0] & 0x7f)) << 6) + (((unsigned int) (data[1] & 0xf8)) >> 2);
 	return EncReading;
 }
-
+*/
 int main(int argc, char** argv){
 	//Initialize ROS system
 	ros::init(argc, argv, "imu");
 	ros::NodeHandle nh;
 	//Ros Rate
-	int sampleRate=2;
-	int readlength=500;
+	int sampleRate=1000;
 	ros::Rate rate(sampleRate);
 	//Setup wiringPi SPI for IMU 
 	  //	SPI_MODE0 = 0,  // CPOL = 0, CPHA = 0, Clock idle low, data is clocked in on rising edge, output data (change) on falling edge
@@ -137,9 +158,9 @@ int main(int argc, char** argv){
 	//Setup IMU
 	int channel_imu = 0;
 	//reset_imu(channel_imu);
-	config_imu(channel_imu);
-	SetOutputConfiguration(channel_imu);
-	measurement_imu(channel_imu);
+	//config_imu(channel_imu);
+	//SetOutputConfiguration(channel_imu);
+	//measurement_imu(channel_imu);
 	//Open channel 1 for encoder
 	channel = 1;
 	// spi_mode = 3;
@@ -150,24 +171,40 @@ int main(int argc, char** argv){
 	//Main
 	float* result; 
 	
-	//Following is a test of SPI 
-	//config_imu(channel_imu);
-	//SetOutputConfiguration(channel_imu);
-	//measurement_imu(channel_imu);
-	//while(ros::ok()){
-		////reset_imu(channel_imu);
-		////for(int i=0;i<10000;i++);
-		////config_imu(channel_imu);
-		////notification_pip(channel_imu);
+	 for(int i=0;i<10000000;i++);
+	config_imu(channel_imu);
+	  for(int i=0;i<10000000;i++);
+	SetOutputConfiguration(channel_imu);   //SetOutputConfig is the bug,with it sending 1000hz data type, imu blows up but save the config. at least. with 100hz it's still fine tho.
+	 for(int i=0;i<100000000;i++);
+	reset_imu(channel_imu);
+	  for(int i=0;i<10000000;i++);
+	measurement_imu(channel_imu);
+	  for(int i=0;i<10000000;i++);
+	while(ros::ok()){
+		//reset_imu(channel_imu);
+		//for(int i=0;i<10000;i++);
+		//config_imu(channel_imu);
+		
 		////config_imu(channel_imu);
 		
 		////for(int i=0;i<10000;i++);
-		////SetOutputConfiguration(channel_imu);
-		////measurement_imu(channel_imu);
-		//readMeasurement_imu(channel_imu);
-		//rate.sleep();
-	//}
-
+		//config_imu(channel_imu);
+		//SetOutputConfiguration(channel_imu);
+		
+		//measurement_imu(channel_imu);
+		//notification_pip(channel_imu,7);
+		//notification_pip(channel_imu,7);
+		//notification_pip(channel_imu,7);
+		//notification_pip(channel_imu,11);
+		result=readMeasurement_imu(channel_imu,21);
+		float wx, wy, wz;
+		//az = result[2]; 
+		wx = result[0]; wy = result[1];wz = result[2];
+		printf("w1: %f w2: %f w3: %f \n", wx, wy, wz);
+		//printf("ax: %f ay: %f az: %f \n", result[0], result[1], az);
+		rate.sleep();
+	}
+/*
 	// zero the encoder and synchonize
 	int test1 = readEncoder(1);
 	
@@ -180,6 +217,7 @@ int main(int argc, char** argv){
 	i++;
 	}
 	*/
+	/*
 	std::string ENC[readlength];
 	std::string Roll[readlength];
 	std::string AngVel1[readlength];
@@ -191,29 +229,36 @@ int main(int argc, char** argv){
 	while(ros::ok()&& (i < readlength)){  // When wirting data into file, add this into the while codition ->  	&& (i < readlength)	
 		result = readMeasurement_imu(channel_imu);
 		
-		float x, y, z, az, wx, wy, wz;
-		x = result[0]; 
-		y = result[1]; 
-		z = result[2]; 
-		az = result[5]; wx = result[6]; wy = result[7]; wz = result[8];
+		/*
+		float x, az, wx, wy, wz;
+		x = result[0]; az = result[5]; wx = result[6]; wy = result[7]; wz = result[8];
 		Roll[i]=Convert(x);
 		Acc[i]=Convert(az);
 		AngVel1[i]=Convert(wx);
 		AngVel2[i]=Convert(wy);
 		AngVel3[i]=Convert(wz);
+		*/
+		/*
+		float az;
+		az = result[2]; 
+		Acc[i]=Convert(az);
+		
+		
 		
 		//Debug: check IMU output data
-		
-		printf("roll: %f pitch: %f yaw: %f \n", x, y, z);
+		/*
+		printf("roll: %f pitch: %f yaw: %f \n", x, result[1], result[2]);
 		printf("ax: %f ay: %f az: %f \n", result[3], result[4], az);
 		printf("w1: %f w2: %f w3: %f \n", wx, wy, wz);
+		*/
 		
+		//printf("ax: %f ay: %f az: %f \n", result[0], result[1], az);
 		/*
 		printf("roll: %f pitch: %f yaw: %f \n", result[0], result[1], result[2]);
 		printf("ax: %f ay: %f az: %f \n", result[3], result[4], result[5]);
 		printf("w1: %f w2: %f w3: %f \n", result[6], result[7], result[8]);
 		*/
-	    		
+	    	/*	
 		//encode
 		int EncChannel = 1;
 		int EncReading = readEncoder(EncChannel);
@@ -247,21 +292,21 @@ int main(int argc, char** argv){
 	/*
 	 * Write data into txt files
 	 */
-	
-	std::ofstream data1("Roll.txt");
+	/*
+	//std::ofstream data1("Roll.txt");
 	std::ofstream data2("Acc.txt");
-	std::ofstream data3("AngVel1.txt");
-	std::ofstream data4("AngVel2.txt");
-	std::ofstream data5("AngVel3.txt");
+	//std::ofstream data3("AngVel1.txt");
+	//std::ofstream data4("AngVel2.txt");
+	//std::ofstream data5("AngVel3.txt");
 	std::ofstream data6("ENC.txt");
 	
 	for(i=0;i<readlength;i++){
-		data1 << Roll[i]<<endl;
+		//data1 << Roll[i]<<endl;
 		data2 << Acc[i]<<endl;
-		data3 << AngVel1[i]<<endl;
-		data4 << AngVel2[i]<<endl;
-		data5 << AngVel3[i]<<endl;
+		//data3 << AngVel1[i]<<endl;
+		//data4 << AngVel2[i]<<endl;
+		//data5 << AngVel3[i]<<endl;
 		data6 << ENC[i]<<endl;
 	}
-	 
+*/
 }
