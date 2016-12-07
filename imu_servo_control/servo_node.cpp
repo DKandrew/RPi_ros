@@ -5,14 +5,27 @@
 #include "ctrl_algorithm.h"
 #include "wiringPi.h"
 #include "pid.h"
+#include "imu_servo_control/imu_signal.h"
+
+#include "std_msgs/String.h"
 
 #define PI 3.14159265
 
 using namespace std; 
 
+float angle_x, angle_y, angle_z;
+
 // This function calls I2C control to servos
 void I2C_ctrl(pca9685 *pwm, vector<int> & pos){
 	pwm->set_pwm(pos);
+}
+
+void callback_function(const imu_servo_control::imu_signal & msg){
+	ROS_INFO_STREAM("Receiving IMU Signal: " << " x=" << msg.x << " y=" << msg.y << " z=" << msg.z);
+	angle_x = msg.x;
+	angle_y = msg.y;
+	angle_z = msg.z;
+	//cout << "Output from callback func: x=" << angle_x << " y=" << angle_y << " z=" << angle_z << endl;
 }
 
 int main(int argc, char**argv){
@@ -22,6 +35,8 @@ int main(int argc, char**argv){
 	//Frequency Control 
 	int sampleRate = 100;
 	ros::Rate rate(sampleRate);
+	//Create a Subscriber
+	ros::Subscriber sub = nh.subscribe("isc/imu_signal", 100, callback_function);
 	//Setup I2C
 	int addr = 0x40;
 	pca9685 pwm = pca9685(addr);
@@ -79,6 +94,13 @@ int main(int argc, char**argv){
 
 	while(ros::ok())
 	{	
+		//Invoke Subscriber
+		ros::spinOnce();  //spinOnce function will execute the subscriber's callback funcion. So x,y,z will be updated. 
+		cout << "In the main loop of sub: x = " << angle_x << " y=" << angle_y << " z=" << angle_z << endl;
+		
+		
+		
+		
 		/*
 		while(option != 0 || option != 1 || option != 2 || option != 3 || option != 4 || option != 5 || option != 6)
 		{
