@@ -47,7 +47,7 @@ int main(int argc, char**argv){
 	pwm.set_pwm_freq(100);
 	//Setup GPIO
 	wiringPiSetup();
-	int pinNumber = 27;
+	int pinNumber = 29;
 	pinMode(pinNumber, OUTPUT);
 	int LED_ON = 0;
 	

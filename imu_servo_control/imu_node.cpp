@@ -129,6 +129,12 @@ int main(int argc, char** argv){
 	delay(delayTime);
 	measurement_imu(channel_imu);
 	
+	//Setup GPIO
+	wiringPiSetup();
+	int pinNumber = 24;
+	pinMode(pinNumber, OUTPUT);
+	int LED_ON = 0;
+	
 	//Main
 	float* result; 
 	while(ros::ok()){
@@ -151,6 +157,15 @@ int main(int argc, char** argv){
 		// Publish the message
 		pub.publish(msg);
 		ROS_INFO_STREAM("Sending IMU Signal Out" << " x=" << msg.x << " y=" << msg.y << " z=" << msg.z );
+		
+		// GPIO control
+		if(LED_ON == 0){
+			LED_ON = 1;
+		}
+		else{
+			LED_ON = 0;
+		}
+		digitalWrite(pinNumber, LED_ON);
 		
 		//Wait
 		rate.sleep();
