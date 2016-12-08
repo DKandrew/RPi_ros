@@ -13,6 +13,7 @@
 
 using namespace std; 
 
+// Global data to store data received from imu_signal 
 float angle_x, angle_y, angle_z;
 
 // This function calls I2C control to servos
@@ -20,6 +21,8 @@ void I2C_ctrl(pca9685 *pwm, vector<int> & pos){
 	pwm->set_pwm(pos);
 }
 
+// func: this is the callback function created for subscriber. 
+// 		Every time subscriber receive imu_siganl it will call this callback funcion to update the global data
 void callback_function(const imu_servo_control::imu_signal & msg){
 	ROS_INFO_STREAM("Receiving IMU Signal: " << " x=" << msg.x << " y=" << msg.y << " z=" << msg.z);
 	angle_x = msg.x;
@@ -96,7 +99,7 @@ int main(int argc, char**argv){
 	{	
 		//Invoke Subscriber
 		ros::spinOnce();  //spinOnce function will execute the subscriber's callback funcion. So x,y,z will be updated. 
-		cout << "In the main loop of sub: x = " << angle_x << " y=" << angle_y << " z=" << angle_z << endl;
+		//cout << "In the main loop of sub: x = " << angle_x << " y=" << angle_y << " z=" << angle_z << endl;
 		
 		
 		
