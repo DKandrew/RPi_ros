@@ -1,596 +1,1251 @@
 #include <ros/ros.h>
 #include <iostream>
+#include <iomanip>
+#include <fstream>
 #include <stdlib.h>
+#include <termios.h>
+#include <ctime>
 #include "pca9685.h"
+#include "lidar.h"
 #include "ctrl_algorithm.h"
 #include "wiringPi.h"
 #include "pid.h"
 #include "imu_servo_control/imu_signal.h"
-
 #include "std_msgs/String.h"
 
 #define PI 3.14159265
 
-using namespace std; 
+using namespace std;
 
+/*////////////////////////////////////////////////////////////////////////
+ * This .cpp file contains functions required for controlling servo motors
+/*////////////////////////////////////////////////////////////////////////
+
+//<Variables Section>==============================================================
 // Global data to store data received from imu_signal 
-float angle_x, angle_y, angle_z;
+float roll, pitch, yaw, acc_x, acc_y, acc_z;
 
+//Rate of Communication with LIDAR and IMU 
+int sampleRate = 100;
+
+//Servo position vector
+int servo_num = 16;
+vector<int> pos(servo_num);
+
+//PWM
+int* PWM;
+int LF_PWM[3];
+int RF_PWM[3];
+int LH_PWM[3];
+int RH_PWM[3];
+
+//Angles for Joints right before converted to PWM
+double result[4][3];
+
+//Temporary Joint Angles
+double angles[4][3];		//Joints angles before correction
+double* temp_result; 		//Temporary variable to receive pointer(before angle correction)
+double* angle_corrected;	//Temporary variable to receive pointer(after angle correction)
+
+//General
+int option = -1;	//Option for Menu selection
+int off = 0;		//Condition for getting out of a menu's while loop
+
+//Reference Points for assembling the robot
+double angle_knee;
+double angle_hip;
+double angle_shoulder;
+
+//pid control initialization
+double dt = 1.0 / (double)sampleRate;
+double pid_max = 10;
+double pid_min = -10;
+double Kp = 0.005;
+double Kd = 0.01;
+double Ki = 0.0;
+double setpoint = 0;
+double inc_pitch = 0;
+double inc_roll = 0;
+
+//Glide
+double default_F = 8.0;		//Default offset for fore legs
+double default_H = -6.0;	//Default offset for hind legs
+double angle_fore = 0;		//To be added for fore  legs
+double angle_hind = 0;		//To be added for hind  legs
+double angle_left = 0;		//To be added for left  legs
+double angle_right = 0;		//To be added for right legs
+double angle_LF = 0;		//Left fore leg dihedral angle
+double angle_RF = 0;		//Right fore leg dihedral angle
+double angle_LH = 0;		//Left  hind leg dihedral angle
+double angle_RH = 0;		//Right hind leg dihedral angle
+double shoulder_F = 0;		//Shoulder angle of fore legs
+double shoulder_H = 20;		//Shoulder angle of hind legs
+double q5_LF;				//q5 angle of left  fore leg
+double q5_RF;				//q5 angle of right fore leg
+double q5_LH;				//q5 angle of left  hind leg
+double q5_RH;				//q5 angle of right hind leg
+bool init_glide = false;	//Boolean to initialize gliding
+int status = 0;				//Variable to log current status of gliding
+
+//Gait
+double** input_LF;			//Double array pointer to record Left  fore leg data points
+double** input_RF;			//Double array pointer to record Right fore leg data points
+double** input_LH;			//Double array pointer to record Left  hind leg data points
+double** input_RH;			//Double array pointer to record Right hind leg data points
+double x_gait = 0;			//Center x point of ellipse foot trajectory
+double y_gait = -11;		//Center y point of ellipse foot trajectory
+double z_gait = -10.75;		//Center z point of ellipse foot trajectory
+int idx_LF = 0;				//Index of left  fore foot trajectory
+int idx_RF = 0;				//Index of right fore foot trajectory
+int idx_LH = 0;				//Index of left  hind foot trajectory
+int idx_RH = 0;				//Index of right hind foot trajectory
+double w_L = 3.0;			//Left  stride length
+double w_R = 3.0;			//Right stride length
+double h_L = 2.0;			//Left  stride height
+double h_R = 2.0;			//Right stride height
+double angle_gait = 0.0;	//Angle of foot trajectory (tilts ellipsoid)
+int res_gait = 50;			//Resolution of foot trajectory (controls speed)
+double ratio_gait = 0.5; 	//Ratio of stance and swing phase ( = stance/(stance + swing) )
+int walk = 0;				//Select mode (0: Stationary 1: Gait)
+int gear = 0;				//Select direction (1: forward 0: N -1: R)
+int count_right = 0;		//Count number of right arrow keys pressed (Negative: left)
+
+//Landing
+bool landTrigger = false;	//Indicates landing Mode
+double landTH = 0.7;		//Threshold(distance) for landing 
+int count_rise = 0;			//Counting of arising motion due to landing preparation
+int countTH = 20;			//Threshold for count_rise
+bool launched = false;		//Indicates launching
+double launchTH = 1;		//Threshold(distance) for launching
+double launchAccTH = 10;	//Threshold(acceleration) for launching
+double close2landTH = 0.5;	//Threshold(distance) for second phase of landing
+double landedTH = 0.05;		//Threshold(distance) for indicating complete landing
+
+//LIDAR
+int addr_lidar = 0x62;		//Address of LIDAR
+int dist;					//Distance output from LIDAR [cm]
+double dist_m;				//Distance in [m]
+double dist_m_prev;			//Precious distance in [m]
+
+//Singular
+double singular_ON_knee = 145*PI/180;	//Knee     angle required to be close to singular position
+double singular_ON_hip = -20*PI/180;	//Hip      angle required to be close to singular position
+double singular_ON_shoulder = 0*PI/180;	//shoulder angle required to be close to singular position
+
+double singular_OFF_knee = 145*PI/180;	//Knee     angle required to be close to singular position
+double singular_OFF_hip = 90*PI/180;	//Hip      angle required to be close to singular position
+double singular_OFF_shoulder = 0*PI/180;//shoulder angle required to be close to singular position
+
+//Setup I2C
+int addr = 0x40;				//pca9685 address
+pca9685 pwm = pca9685(addr);	//Initialize pca9685
+
+//Log File
+ofstream data;			//Initialize ofstream 
+int w = 12;				//Width for each column in data
+bool logging = false;	//Boolean to turn ON and OFF logging
+//End of Variable Section======================================================================
+
+
+//<Functions Section>=============================================================
 // This function calls I2C control to servos
-void I2C_ctrl(pca9685 *pwm, vector<int> & pos){
+void I2C_ctrl(pca9685 *pwm, vector<int> & pos) 
+{
 	pwm->set_pwm(pos);
 }
 
-// func: this is the callback function created for subscriber. 
-// 		Every time subscriber receive imu_siganl it will call this callback funcion to update the global data
-void callback_function(const imu_servo_control::imu_signal & msg){
-	ROS_INFO_STREAM("Receiving IMU Signal: " << " x=" << msg.x << " y=" << msg.y << " z=" << msg.z);
-	angle_x = msg.x;
-	angle_y = msg.y;
-	angle_z = msg.z;
+//This is the callback function created for subscriber. 
+//Every time subscriber receives imu_siganl, it will call this callback funcion to update the global data
+void callback_function(const imu_servo_control::imu_signal & msg)
+{
+	//ROS_INFO_STREAM("Receiving IMU Signal: " << " x=" << msg.x << " y=" << msg.y << " z=" << msg.z);
+	roll = msg.angle_x + 90.0;
+	pitch = -msg.angle_y;
+	yaw = msg.angle_z;
+	acc_x = msg.acc_x + 0.14;
+	acc_y = msg.acc_z - 0.38;
+	acc_z = msg.acc_y + 9.710297782608693;
 	//cout << "Output from callback func: x=" << angle_x << " y=" << angle_y << " z=" << angle_z << endl;
 }
 
-int main(int argc, char**argv){
+//Convert Angles to PWM values
+void angle2PWM()
+{
+	PWM = angle2PWM_LF(result[0][0], result[0][1], result[0][2]);
+	LF_PWM[0] = PWM[0];
+	LF_PWM[1] = PWM[1];
+	LF_PWM[2] = PWM[2];
+
+	PWM = angle2PWM_RF(result[1][0], result[1][1], result[1][2]);
+	RF_PWM[0] = PWM[0];
+	RF_PWM[1] = PWM[1];
+	RF_PWM[2] = PWM[2];
+				
+	PWM = angle2PWM_LH(result[2][0], result[2][1], result[2][2]);
+	LH_PWM[0] = PWM[0];
+	LH_PWM[1] = PWM[1];
+	LH_PWM[2] = PWM[2];
+
+	PWM = angle2PWM_RH(result[3][0], result[3][1], result[3][2]);
+	RH_PWM[0] = PWM[0];
+	RH_PWM[1] = PWM[1];
+	RH_PWM[2] = PWM[2];
+	
+	return;
+}
+
+//Print out PWM values to the console and "data.txt"
+void printPWM()
+{
+	cout<<"LF_PWM Knee: "<<LF_PWM[0]<<"  LF_PWM Hip: "<<LF_PWM[1]<<"  LF_PWM Shoulder: "<<LF_PWM[2]<<endl;
+	cout<<"RF_PWM Knee: "<<RF_PWM[0]<<"  RF_PWM Hip: "<<RF_PWM[1]<<"  RF_PWM Shoulder: "<<RF_PWM[2]<<endl;
+	cout<<"LH_PWM Knee: "<<LH_PWM[0]<<"  LH_PWM Hip: "<<LH_PWM[1]<<"  LH_PWM Shoulder: "<<LH_PWM[2]<<endl;
+	cout<<"RH_PWM Knee: "<<RH_PWM[0]<<"  RH_PWM Hip: "<<RH_PWM[1]<<"  RH_PWM Shoulder: "<<RH_PWM[2]<<endl;
+	
+	data<<"LF_PWM Knee: "<<LF_PWM[0]<<"  LF_PWM Hip: "<<LF_PWM[1]<<"  LF_PWM Shoulder: "<<LF_PWM[2]<<endl;
+	data<<"RF_PWM Knee: "<<RF_PWM[0]<<"  RF_PWM Hip: "<<RF_PWM[1]<<"  RF_PWM Shoulder: "<<RF_PWM[2]<<endl;
+	data<<"LH_PWM Knee: "<<LH_PWM[0]<<"  LH_PWM Hip: "<<LH_PWM[1]<<"  LH_PWM Shoulder: "<<LH_PWM[2]<<endl;
+	data<<"RH_PWM Knee: "<<RH_PWM[0]<<"  RH_PWM Hip: "<<RH_PWM[1]<<"  RH_PWM Shoulder: "<<RH_PWM[2]<<endl;
+	
+	return;
+}
+
+//Print out angles to the console and "data.txt"
+void printAngles()
+{	
+	cout<<"LF Knee: "<<angles[0][0]<<"  LF Hip: "<<angles[0][1]<<"  LF Shoulder: "<<angles[0][2]<<endl;
+	cout<<"RF Knee: "<<angles[1][0]<<"  RF Hip: "<<angles[1][1]<<"  RF Shoulder: "<<angles[1][2]<<endl;
+	cout<<"LH Knee: "<<angles[2][0]<<"  LH Hip: "<<angles[2][1]<<"  LH Shoulder: "<<angles[2][2]<<endl;
+	cout<<"RH Knee: "<<angles[3][0]<<"  RH Hip: "<<angles[3][1]<<"  RH Shoulder: "<<angles[3][2]<<endl;
+	
+	data<<"LF Knee: "<<angles[0][0]<<"  LF Hip: "<<angles[0][1]<<"  LF Shoulder: "<<angles[0][2]<<endl;
+	data<<"RF Knee: "<<angles[1][0]<<"  RF Hip: "<<angles[1][1]<<"  RF Shoulder: "<<angles[1][2]<<endl;
+	data<<"LH Knee: "<<angles[2][0]<<"  LH Hip: "<<angles[2][1]<<"  LH Shoulder: "<<angles[2][2]<<endl;
+	data<<"RH Knee: "<<angles[3][0]<<"  RH Hip: "<<angles[3][1]<<"  RH Shoulder: "<<angles[3][2]<<endl;
+
+	return;
+}
+
+//Write PWM values to servo motors
+void write2Motors()
+{
+	//Write to Servo Motors			
+	pos[7] = LH_PWM[0];
+	pos[6] = LH_PWM[1];
+	pos[4] = LH_PWM[2];
+	pos[3] = RH_PWM[0];
+	pos[1] = RH_PWM[1];
+	pos[0] = RH_PWM[2];
+	pos[15] = RF_PWM[0];
+	pos[13] = RF_PWM[1];
+	pos[12] = RF_PWM[2];
+	pos[11] = LF_PWM[0];
+	pos[9] = LF_PWM[1];
+	pos[8] = LF_PWM[2];
+	I2C_ctrl(&pwm, pos);
+	
+	return;
+}
+
+//Covert joint angles to motor angles
+void assignAngles(int option)
+{
+	
+	for(int i = 0; i < 4; ++i)
+	{
+		if(option == 0)
+		{
+			if(i == 0 || i == 3)
+				angle_corrected = angle_temp_correction_LF(angles[i][0], angles[i][1], angles[i][2]);
+			if(i == 1 || i == 2)
+				angle_corrected = angle_temp_correction_RF(angles[i][0], angles[i][1], angles[i][2]);
+		}
+		if(option == 1)
+		{
+			temp_result = inverse_kinematics(angles[i][0], angles[i][1], angles[i][2]);			
+		}
+		if(option == 2)
+		{
+			temp_result = glide(angles[i][0], angles[i][1], angles[i][2]);
+		}
+		if(option != 0 && (i == 0 || i == 3))
+			angle_corrected = angle_temp_correction_LF(temp_result[0], temp_result[1], temp_result[2]);
+		if(option != 0 && (i == 1 || i == 2))
+			angle_corrected = angle_temp_correction_RF(temp_result[0], temp_result[1], temp_result[2]);
+		result[i][0] = angle_corrected[0];
+		result[i][1] = angle_corrected[1];
+		result[i][2] = angle_corrected[2];			
+	}
+
+	return;
+}
+
+//Drive motors to put the legs very close to singular configuration
+void singularON()
+{
+	double* angle_corrected;
+	angle_corrected = angle_temp_correction_LF(singular_ON_knee, singular_ON_hip, singular_ON_shoulder);
+	result[0][0] = angle_corrected[0];
+	result[0][1] = angle_corrected[1];
+	result[0][2] = angle_corrected[2];	
+	result[3][0] = angle_corrected[0];
+	result[3][1] = angle_corrected[1];
+	result[3][2] = angle_corrected[2];	
+			
+	angle_corrected = angle_temp_correction_RF(singular_ON_knee, singular_ON_hip, singular_ON_shoulder);
+	result[1][0] = angle_corrected[0];
+	result[1][1] = angle_corrected[1];
+	result[1][2] = angle_corrected[2];	
+	result[2][0] = angle_corrected[0];
+	result[2][1] = angle_corrected[1];
+	result[2][2] = angle_corrected[2];	
+	
+	angle2PWM();
+	write2Motors();
+	
+	return;	
+}
+
+//Drive motors to put the legs out of close to singular configuration
+void singularOFF()
+{	
+	angle_corrected = angle_temp_correction_LF(singular_OFF_knee, singular_OFF_hip, singular_OFF_shoulder);
+	result[0][0] = angle_corrected[0];
+	result[0][1] = angle_corrected[1];
+	result[0][2] = angle_corrected[2];	
+	result[3][0] = angle_corrected[0];
+	result[3][1] = angle_corrected[1];
+	result[3][2] = angle_corrected[2];
+			
+	angle_corrected = angle_temp_correction_RF(singular_OFF_knee, singular_OFF_hip, singular_OFF_shoulder);
+	result[1][0] = angle_corrected[0];
+	result[1][1] = angle_corrected[1];
+	result[1][2] = angle_corrected[2];	
+	result[2][0] = angle_corrected[0];
+	result[2][1] = angle_corrected[1];
+	result[2][2] = angle_corrected[2];	
+
+	angle2PWM();
+	write2Motors();
+	
+	return;	
+}
+
+//Calculate and assign q5 values
+void getq5()
+{
+	q5_LF = 155.0 + (angle_LF + 40.0) / 8.0;
+	q5_RF = 155.0 + (angle_RF + 40.0) / 8.0;
+	q5_LH = 155.0 + (angle_LH + 40.0) / 8.0;
+	q5_RH = 155.0 + (angle_RH + 40.0) / 8.0;
+	
+	return;
+}
+
+//Real-time Keyboard Input (Enter is required)
+int _getch()
+{
+	static struct termios oldt, newt;
+	tcgetattr(STDIN_FILENO, &oldt);           // save old settings
+	newt = oldt;
+	newt.c_lflag &= ~(ICANON);                 // disable buffering      
+	tcsetattr(STDIN_FILENO, TCSANOW, &newt);  // apply new settings
+
+	int c = getchar();  // read character (non-blocking)
+
+	tcsetattr(STDIN_FILENO, TCSANOW, &oldt);  // restore old settings
+	return c;
+}
+
+//Real-time Keyboard Input
+char getch()
+{
+	fd_set set;
+	struct timeval timeout;
+	int rv;
+	char buff = 0;
+	int len = 1;
+	int filedesc = 0;
+	FD_ZERO(&set);
+	FD_SET(filedesc, &set);
+
+	timeout.tv_sec = 0;
+	timeout.tv_usec = 1000;
+
+	rv = select(filedesc + 1, &set, NULL, NULL, &timeout);
+
+	struct termios old = { 0 };
+	if (tcgetattr(filedesc, &old) < 0)
+		ROS_ERROR("tcsetattr()");
+	old.c_lflag &= ~ICANON;
+	old.c_lflag &= ~ECHO;
+	old.c_cc[VMIN] = 1;
+	old.c_cc[VTIME] = 0;
+	if (tcsetattr(filedesc, TCSANOW, &old) < 0)
+		ROS_ERROR("tcsetattr ICANON");
+
+	if (rv == -1)
+		ROS_ERROR("select");
+	else if (rv == 0)
+	{
+		//ROS_INFO("no_key_pressed");
+	}
+	else
+		read(filedesc, &buff, len);
+
+	old.c_lflag |= ICANON;
+	old.c_lflag |= ECHO;
+	if (tcsetattr(filedesc, TCSADRAIN, &old) < 0)
+		ROS_ERROR("tcsetattr ~ICANON");
+	return (buff);
+}
+
+//Print out current status of gliding on console
+void getStatus_glide()
+{
+	printf("-----------------------------------------------------\n");
+	if(status == 0)
+		printf("<Standby Mode>\n");
+	if(status == 1)
+		printf("<Gliding Mode>\n");
+	if(status == 2)
+		printf("<Preparing Landing>\n");
+	if(status == 3)
+		printf("<Shoulder Tension Decreased>\n");
+	if(status == 4)
+		printf("<Close to Land>\n");
+	if(status == 5)
+		printf("<Landed>\n");
+		
+	printf("Roll: %.2f Pitch: %.2f Yaw: %.2f Acc_x: %.2f Acc_y: %.2f Acc_z: %.2f\n",roll, pitch, yaw, acc_x, acc_y, acc_z);
+	printf("Distance: %.2fm\n", dist_m);
+	printf("PID Increment:: roll: %.2f  pitch: %.2f\n", inc_roll, inc_pitch);
+	printf("angle_fore: %.2f  angle_hind: %.2f\n", angle_fore, angle_hind);
+	printf("angle_left: %.2f  angle_right: %.2f\n", angle_left, angle_right);
+	printf("angle_LF: %.2f  angle_RF: %.2f  angle_LH: %.2f  angle_RH: %.2f\n", angle_LF, angle_RF, angle_LH, angle_RH);
+	if(logging)
+		printf("Logging Data ON\n\n");
+	else
+		printf("Logging Data OFF\n\n");
+
+	return;
+}
+
+//Print out name of column at "data.txt" for data logging
+void logGlideInit()
+{
+	data<<fixed<<setfill(' ')<<setw(w)<<"Roll";
+	data<<fixed<<setfill(' ')<<setw(w)<<"Pitch";
+	data<<fixed<<setfill(' ')<<setw(w)<<"Yaw";
+	data<<fixed<<setfill(' ')<<setw(w)<<"Acc_X";
+	data<<fixed<<setfill(' ')<<setw(w)<<"Acc_Y";
+	data<<fixed<<setfill(' ')<<setw(w)<<"Acc_Z";
+	data<<fixed<<setfill(' ')<<setw(w)<<"Dist[m]";
+	data<<fixed<<setfill(' ')<<setw(w)<<"Inc Roll";
+	data<<fixed<<setfill(' ')<<setw(w)<<"Inc Pitch";
+	data<<fixed<<setfill(' ')<<setw(w)<<"Fore";
+	data<<fixed<<setfill(' ')<<setw(w)<<"Hind";
+	data<<fixed<<setfill(' ')<<setw(w)<<"Left";
+	data<<fixed<<setfill(' ')<<setw(w)<<"Right";
+	data<<fixed<<setfill(' ')<<setw(w)<<"LF";
+	data<<fixed<<setfill(' ')<<setw(w)<<"RF";
+	data<<fixed<<setfill(' ')<<setw(w)<<"LH";
+	data<<fixed<<setfill(' ')<<setw(w)<<"RH"<<endl;
+	
+	return;
+}
+
+//Log data to "data.txt"
+void logGlide()
+{	
+	data<<fixed<<setfill(' ')<<setw(w)<<roll;
+	data<<fixed<<setfill(' ')<<setw(w)<<pitch;
+	data<<fixed<<setfill(' ')<<setw(w)<<yaw;
+	data<<fixed<<setfill(' ')<<setw(w)<<acc_x;
+	data<<fixed<<setfill(' ')<<setw(w)<<acc_y;
+	data<<fixed<<setfill(' ')<<setw(w)<<acc_z;
+	data<<fixed<<setfill(' ')<<setw(w)<<dist_m;
+	data<<fixed<<setfill(' ')<<setw(w)<<inc_roll;
+	data<<fixed<<setfill(' ')<<setw(w)<<inc_pitch;
+	data<<fixed<<setfill(' ')<<setw(w)<<angle_fore;
+	data<<fixed<<setfill(' ')<<setw(w)<<angle_hind;
+	data<<fixed<<setfill(' ')<<setw(w)<<angle_left;
+	data<<fixed<<setfill(' ')<<setw(w)<<angle_right;
+	data<<fixed<<setfill(' ')<<setw(w)<<angle_LF;
+	data<<fixed<<setfill(' ')<<setw(w)<<angle_RF;
+	data<<fixed<<setfill(' ')<<setw(w)<<angle_LH;
+	data<<fixed<<setfill(' ')<<setw(w)<<angle_RH<<endl;
+	
+	return;	
+}
+
+//Handle real-time keyboard input for gliding
+void handleKey_glide(char c)
+{
+	//Terminate while loop
+	if(c == '/')
+		off = 1;
+		
+	//Print Current Status
+	if(c == '.')
+		getStatus_glide();
+		
+	//Log Start
+	if(c == 'l')
+	{
+		logging = !logging;
+		if(!logging)
+		{
+			cout<<"Log Mode OFF"<<endl;
+			data<<"Log Mode OFF"<<endl;						
+		}
+		if(!init_glide && logging)
+		{
+			cout<<"Log Mode ON"<<endl;
+			data<<"Log Mode ON"<<endl;	
+			logGlideInit();
+		}
+	}
+}
+
+//Handle real-time keyboard input for gait
+void handleKey_gait(char c)
+{
+	//Gait Width Control
+	if (c == 'q')
+	{
+		w_L += 0.5;
+		w_R += 0.5;
+		printf(" <= Pressed  Gait Width Increased => Current w_L: %.1f cm   w_R: %.1f cm\n", w_L, w_R);
+	}
+	if (c == 'a')
+	{
+		w_L -= 0.5;
+		w_R -= 0.5;
+		printf(" <= Pressed  Gait Width Decreased => Current w_L: %.1f cm   w_R: %.1f cm\n", w_L, w_R);
+	}
+
+	//Gait Height Control
+	if (c == 'w')
+	{
+		h_L += 0.5;
+		h_R += 0.5;
+		printf(" <= Pressed  Gait Height Increased => Current h_L: %.1f cm   h_R: %.1f cm\n", h_L, h_R);
+	}
+	if (c == 's')
+	{
+		h_L -= 0.5;
+		h_R -= 0.5;
+		printf(" <= Pressed  Gait Height Decreased => Current h_L: %.1f cm   h_R: %.1f cm\n", h_L, h_R);
+	}
+
+	//Gait Angle Contorl
+	if (c == 'e')
+	{
+		angle_gait += 5.0;
+		printf(" <= Pressed  Angle Increased => Current Angle: %.2f Degree\n", angle_gait);
+	}
+	if (c == 'd')
+	{
+		angle_gait -= 5.0;
+		printf(" <= Pressed  Angle Decreased => Current Angle: %.2f Degree\n", angle_gait);
+	}
+
+	//Gait Speed Control
+	if (c == 'r')
+	{
+		res_gait -= 2;
+		idx_LF = (double)res_gait*(double)idx_LF/(double)(res_gait + 2);
+		idx_RF = (double)res_gait*(double)idx_RF/(double)(res_gait + 2);
+		idx_LH = (double)res_gait*(double)idx_LH/(double)(res_gait + 2);
+		idx_RH = (double)res_gait*(double)idx_RH/(double)(res_gait + 2);
+		printf(" <= Pressed  Speed Increased => Current Resolution: %i\n", res_gait);
+	}
+	if (c == 'f')
+	{
+		res_gait += 2;
+		idx_LF = (double)res_gait*(double)idx_LF/(double)(res_gait - 2);
+		idx_RF = (double)res_gait*(double)idx_RF/(double)(res_gait - 2);
+		idx_LH = (double)res_gait*(double)idx_LH/(double)(res_gait - 2);
+		idx_RH = (double)res_gait*(double)idx_RH/(double)(res_gait - 2);
+		printf(" <= Pressed  Speed Decreased => Current Resolution: %i\n", res_gait);
+	}
+
+	//Gait Swing and Stance Ratio Control
+	if (c == 't')
+	{
+		ratio_gait += 0.05;
+		printf(" <= Pressed  Gait Ratio Increased => Stance: %i%, Swing: %i%\n", (int)(100.0*ratio_gait), (int)(100.0*(1.0 - ratio_gait)));
+	}
+	if (c == 'g')
+	{
+		ratio_gait -= 0.05;
+		printf(" <= Pressed  Gait Ratio Decreased => Stance: %i%, Swing: %i%\n", (int)(100.0*ratio_gait), (int)(100.0*(1 - ratio_gait)) );
+	}
+
+	//Phase of Each Leg Control
+	//LF
+	if (c == 'y')
+	{
+		++idx_LF;
+		printf(" <= Pressed  LF Leg Phase Increased\n");
+	}
+	if (c == 'h')
+	{
+		--idx_LF;
+		printf(" <= Pressed  LF Leg Phase Decreased\n");
+	}
+	//RF
+	if (c == 'u')
+	{
+		++idx_RF;
+		printf(" <= Pressed  RF Leg Phase Increased\n");
+	}
+	if (c == 'j')
+	{
+		--idx_RF;
+		printf(" <= Pressed  RF Leg Phase Decreased\n");
+	}
+	//LH
+	if (c == 'i')
+	{
+		++idx_LH;
+		printf(" <= Pressed  LH Leg Phase Increased\n");
+	}
+	if (c == 'k')
+	{
+		--idx_LH;
+		printf(" <= Pressed  LH Leg Phase Decreased\n");
+	}
+	//RH
+	if (c == 'o')
+	{
+		++idx_RH;
+		printf("<= Pressed  RH Leg Phase Increased\n");
+	}
+	if (c == 'l')
+	{
+		--idx_RH;
+		printf("<= Pressed  RH Leg Phase Decreased\n");
+	}
+
+	//Trot
+	if (c == 'z')
+	{
+		idx_RF = idx_LF + res_gait/2.0;
+		idx_LH = idx_LF + res_gait/2.0;
+		idx_RH = idx_LF;
+		ratio_gait = 0.6;
+		printf(" <= Pressed\n => Trot Mode\n");
+	}			
+	//Lateral Sequence Walk
+	if (c == 'x')
+	{
+		idx_RF = idx_LF + res_gait*0.5;
+		idx_LH = idx_LF + res_gait*0.25;
+		idx_RH = idx_LF + res_gait*0.75;
+		ratio_gait = 0.7;
+		printf(" <= Pressed\n => Lateral Sequence Mode\n");
+	}
+	//Diagonal Sequence Walk
+	if (c == 'c')
+	{
+		ratio_gait = 0.7;
+		idx_RF = idx_LF + res_gait*0.5;
+		idx_LH = idx_LF + res_gait*0.75;
+		idx_RH = idx_LF + res_gait*0.25;				
+		printf(" <= Pressed\n => Diagonal Sequence Mode\n");
+	}
+	if(c == 'v')
+	{
+		++walk;
+		if(walk >= 2)
+			walk = 0;
+		if(walk == 0)
+			printf(" <= Pressed\n => Walking Mode\n");
+		else
+		{
+			idx_LF = 0;
+			idx_RF = 0;
+			idx_LH = 0;
+			idx_RH = 0;
+			ratio_gait = 0.5;
+			printf(" <= Pressed\n => Stationary Mode\n");
+		}
+	}
+				
+	//Arrow Key Keyboard Input
+	if (c == '\033')
+	{
+		getch();
+		char arrow = getch();
+		if (arrow == 'A')
+		{
+			++gear;
+			if(gear >= 1)
+				gear = 1;
+			printf(" Up Arrow Key Pressed\n");
+			if(gear == 0)
+				printf(" Gear: %i => Idle Mode\n", gear);
+			if(gear == 1)
+				printf(" Gear: %i => Move Forward\n", gear);
+		}
+		if (arrow == 'B')
+		{
+			--gear;
+			if(gear < -1)
+				gear = -1;
+			printf(" Down Arrow Key Pressed\n");
+			if(gear == 0)
+				printf(" Gear: %i => Idle Mode\n", gear);
+			if(gear == -1)
+				printf(" Gear: %i => Move Backward\n", gear);			
+		}
+		if (arrow == 'C')
+		{
+			w_L += 0.5;
+			w_R -= 0.5;
+			++count_right;
+			printf("Right Arrow Key Pressed\n => Current w_L = %0.1f  w_R = %0.1f\n", w_L, w_R);
+		}
+		if (arrow == 'D')
+		{
+			w_L -= 0.5;
+			w_R += 0.5;
+			--count_right;
+			printf("Left Arrow Key Pressed\n => Current w_L = %0.1f  w_R = %0.1f\n", w_L, w_R);
+		}
+	}
+	
+	//Get Current Status
+	if(c == '.')
+	{
+		printf("Current Status----------------------------------\n");
+		if(walk == 0)
+			printf("Mode: Gait Mode\n");
+		else
+			printf("Mode: Swag Mode\n");
+		if(gear == 1)
+			printf("Gear: 1\n");
+		if(gear == 0)
+			printf("Gear: N\n");
+		if(gear == -1)
+			printf("Gear: R\n");
+		if(count_right == 0)
+			printf("Direction: Moving Strait\n");
+		if(count_right > 0)
+			printf("Direction: Right %i\n", count_right);
+		if(count_right < 0)
+			printf("Direction: Left %i\n", -count_right);	
+		
+		printf("Left Width: %0.1f  Right Width: %0.1f\n", w_L, w_R);
+		printf("Left Height: %0.1f  Right Height: %0.1f\n", h_L, h_R);
+		printf("Resolution: %i\n", res_gait);
+		printf("Stance Phase: %i%\n", (int)(100*ratio_gait));
+		printf("Angle: %i\n", (int)angle_gait);
+		printf("------------------------------------------------\n");
+	}
+	
+	//Terminate while loop
+	if(c == '/')
+		off = 1;
+	return;
+}
+//End of function section====================================================================
+
+//Main Function Starts Here===================================================================
+int main(int argc, char**argv) 
+{
 	//Initialize ROS system
-	ros::init(argc, argv, "sevo_node_isc");
+	ros::init(argc, argv, "servo_node_isc");
 	ros::NodeHandle nh;
+	
 	//Frequency Control 
-	int sampleRate = 100;
 	ros::Rate rate(sampleRate);
+	
 	//Create a Subscriber
 	ros::Subscriber sub = nh.subscribe("isc/imu_signal", 100, callback_function);
-	//Setup I2C
-	int addr = 0x40;
-	pca9685 pwm = pca9685(addr);
-	//Servo position vector
-	int servo_num = 12;
-	vector<int> pos (servo_num);
+		
 	//Set PWM frequency
 	pwm.set_pwm_freq(100);
+
 	//Setup GPIO
 	wiringPiSetup();
 	int pinNumber = 29;
 	pinMode(pinNumber, OUTPUT);
 	int LED_ON = 0;
 	
-	//Main
-	double x,y,z;
-	int up = 0;	
-	double init_x = 0;
-	double init_y = -11;	
-	double init_z = -15;	
-	x = init_x;
-	y = init_y;	
-	z = init_z;	
-	double increment = 0.02;
-	double range_low = -15;
-	double range_high = -8.5;
+	//PID Initialization
+	pid PID_pitch = pid(dt, pid_max, pid_min, Kp, Kd, Ki);
+	pid PID_roll = pid(dt, pid_max, pid_min, Kp, Kd, Ki);
 	
-	double* temp_result_RF;
-	double* temp_result_LF;
-	int* result;
-	int option = -1;
-	double angle_knee;// = 154;
-	double angle_hip;// = 20;	
-	double angle_shoulder;// = 30;
+	//LIDAR Initialization
+	lidar _lidar = lidar(addr_lidar);
 	
-	//pid control initialization
-	double dt = 1.0/(double)sampleRate;
-	double max = 10;
-	double min = -10; 
-	double Kp = 0.005;
-	double Kd = 0.01;
-	double Ki = 0.0;
+	//Logging Data Initialization
+	data.open("data.txt", ofstream::out | ofstream::app);
+	time_t t = time(0);
+	struct tm *now = localtime(&t);
+	data<<"\n==============================<Da Real One(DR1) Data Logging Started>===========================\n";
+	data<<setfill('0')<<"Date: "<<(now->tm_year + 1900)<<'/'<<setw(2)<<(now->tm_mon)+1<<'/'<<setw(2)<<now->tm_mday;
+	data<<setfill('0')<<"   Time: "<<setw(2)<<now->tm_hour<<':'<<setw(2)<<now->tm_min<<':'<<setw(2)<<now->tm_sec<<endl;
+	data<<endl;
 	
-	pid PID_pitch = pid(dt, max, min, Kp, Kd, Ki);
-	pid PID_roll = pid(dt, max, min, Kp, Kd, Ki);
-	
-	double angle_front = 0;
-	double angle_back = 0;	
-	double angle_left = 0;
-	double angle_right = 0;
-	double angle_LF = 0;
-	double angle_RF = 0;
-	double angle_LH = 0;
-	double angle_RH = 0;
 
-	while(ros::ok())
-	{	
+	
+	//Main ROS While Loop Starts
+	while (ros::ok())
+	{
 		//Invoke Subscriber
-		ros::spinOnce();  //spinOnce function will execute the subscriber's callback funcion. So x,y,z will be updated. 
-		//cout << "In the main loop of sub: x = " << angle_x << " y=" << angle_y << " z=" << angle_z << endl;
+		ros::spinOnce();  //Execute callback_funcion to update IMU information 
+						 
+		//Real-time Keyboard Input
+		char c = getch();
+						  
+		//LIDAR reading
+		dist = cos(pitch)*(_lidar.i2cRead() - 13);
+		dist_m = (double)dist/100.0;
 		
-		
-		
-		
-		/*
-		while(option != 0 || option != 1 || option != 2 || option != 3 || option != 4 || option != 5 || option != 6)
+		//While loop for choosing a menu
+		while(option != 0 || option != 1 || option != 2 || option != 3 || option != 4 || option != 5)
 		{
-			cout<<"================"<<endl;		
-			cout<<"Choose an Option"<<endl;
+			cout<<endl;
+			cout<<"< Da Real One(DR1) Operational >"<<endl;
+			cout<<"=============================================="<<endl;
+		    cout<<"Choose an Option"<<endl;
 			cout<<"0: Debugging mode"<<endl;
-			cout<<"1: Linear Motion"<<endl;
-			cout<<"2: Move Forward"<<endl;
-			cout<<"3: Flying Mode"<<endl;
-			cout<<"4: Angle Control"<<endl;
-			cout<<"5: IMU Test"<<endl;
-			cout<<"6: Trot Test"<<endl;
-			cout<<"================"<<endl;
+			cout<<"1: Gliding Angle Control"<<endl;
+			cout<<"2: Gliding Mode"<<endl;
+			cout<<"3: Gait Mode"<<endl;
+			cout<<"4: Singular ON"<<endl;
+			cout<<"5: Singular OFF"<<endl;
+			cout<<endl;
+			cout<<"(To Terminate, press ctrl+c => press 0 => Enter)"<<endl;
+			cout<<"=============================================="<<endl;
 			cout<<"Option: "; cin >> option;
 			cout<<endl;
 			option = (int)option;
 			cout<<"Choosen Option: "<<option<<endl;
-			if(option == 0 || option == 1 || option == 2 || option == 3 || option == 4 || option == 5 || option == 6)
+			if( option == 0 || option == 1 || option == 2 || option == 3 || option == 4 || option == 5 )
 				break;
 			else
-				cout<<"Please Select from 0, 1, 2, 3, 4, 5 and 6"<<endl;				 
-		}		
-		*/
-		option = 5;
-		//Option0: Debugging Mode		
-		if(option == 0)
+				cout<<"Please Select from 0, 1, 2, 3, 4 and 5"<<endl;
+		}						  
+
+		off = 0;	//set off = 0 to make sure each option's while loop works
+
+		//Option 0: <Debugging Mode> -----------------------------------
+		//This mode drives servo motors to have
+		//LF & RH: Knee     = 0  degree  RF & LH: knee     = 180 degree
+		//LF & RH: Hip      = 90 degree  RF & LH: Hip      = 90  degree
+		//LF & RH: Shoulder = 0  degree  RF & LH: Shoulder = 0   degree
+		//This configuration helps assembling the robot
+		//--------------------------------------------------------------
+		if (option == 0)
 		{
 			cout<<"<Debugging Mode Selected>"<<endl;
-			angle_knee = 180;
-			angle_hip = 90;	
+			data<<"<Debugging Mode Selected>"<<endl;
+			angle_knee = 180*(PI / 180);
+			angle_hip = 90*(PI / 180);
 			angle_shoulder = 0;
-			double* LF = new double[3];	
-			temp_result_LF = angle_temp_correction_LF(0*(PI/180),90*(PI/180), 180*(PI/180));
-			LF[0] = temp_result_LF[0];
-			LF[1] = temp_result_LF[1];
-			LF[2] = temp_result_LF[2];
 			
-			double* RF = new double[3];			
-			temp_result_RF = angle_temp_correction_RF(angle_knee*(PI/180), angle_hip*(PI/180), angle_shoulder*(PI/180));
-			RF[0] = temp_result_RF[0];
-			RF[1] = temp_result_RF[1];
-			RF[2] = temp_result_RF[2];
-			
-			int* LF_PWM = new int[3];
-			result = angle2PWM(LF[0], LF[1], LF[2]);
-			LF_PWM[0] = result[0];
-			LF_PWM[1] = result[1];
-			LF_PWM[2] = result[2];
-				
-			int* RF_PWM = new int[3];
-			result = angle2PWM(RF[0], RF[1], RF[2]);
-			RF_PWM[0] = result[0];
-			RF_PWM[1] = result[1];
-			RF_PWM[2] = result[2];
-			
-			cout<<"LF_PWM Knee: "<<LF_PWM[0]<<"  LF_PWM Hip: "<<LF_PWM[1]<<"  LF_PWM Shoulder: "<<LF_PWM[2]<<endl;
-			cout<<"RF_PWM Knee: "<<RF_PWM[0]<<"  RF_PWM Hip: "<<RF_PWM[1]<<"  RF_PWM Shoulder: "<<RF_PWM[2]<<endl;
-					
-			
-			//Write to Servo Motors			
-			pos[0] = LF_PWM[0];
-			pos[1] = LF_PWM[1];
-			pos[2] = LF_PWM[2];
-			pos[3] = RF_PWM[0];
-			pos[4] = RF_PWM[1];
-			pos[5] = RF_PWM[2];
-			pos[6] = RF_PWM[0];
-			pos[7] = RF_PWM[1];
-			pos[8] = RF_PWM[2];
-			pos[9] = LF_PWM[0];
-			pos[10] = LF_PWM[1];
-			pos[11] = LF_PWM[2];
-			I2C_ctrl(&pwm, pos);				
-		}
-		
-		//Option1: Linear Motion Code
-		if(option == 1)
-		{
-			cout<<"<Linear Motion Mode>"<<endl;
-			int limit_i = 2000;
-			x = init_x;
-			y = init_y;
-			z = init_z;	
-			for(int i = 0; i < limit_i; ++i)
-			{
-				if(z < range_low)
-					up = 1;		//Go Up
-				if(z > range_high)
-					up = 0;		//Go Down
-					
-				if(up)
-					z += increment;
-				else
-					z -= increment;		
+			angles[0][0] = angle_knee; angles[0][1] = angle_hip; angles[0][2] = angle_shoulder;
+			angles[1][0] = angle_knee; angles[1][1] = angle_hip; angles[1][2] = angle_shoulder;
+			angles[2][0] = angle_knee; angles[2][1] = angle_hip; angles[2][2] = angle_shoulder;
+			angles[3][0] = angle_knee; angles[3][1] = angle_hip; angles[3][2] = angle_shoulder;
 
-				temp_result_RF = inverse_kinematics(x, y, z);							
-				//cout << "q1: " << (180/PI)*temp_result[0] << " q2: " << (180/PI)*temp_result[1] << endl;
-				temp_result_RF = angle_temp_correction_RF(temp_result_RF[0], temp_result_RF[1], temp_result_RF[2]);
-				cout << "Corrected q1: " << temp_result_RF[0] << " Corrected q2: " << temp_result_RF[1] << endl;
-				
-				result = angle2PWM(temp_result_RF[0], temp_result_RF[1], temp_result_RF[2]);
-				pos[0] = result[0];
-				pos[1] = result[1]; //Port 1 connects to B servo 
-				pos[2] = result[2]; //Port 2 connects to A servo		
-				
-				I2C_ctrl(&pwm, pos);
-				//ros::Duration(0.001).sleep();
-				
-				if(z < -15 || z > -8.5)
-					ros::Duration(1).sleep();
-				cout<<"i: "<<i<<"/"<<limit_i<<endl;
-			}
-		}
-		
-		//Option2: Walking Motion Code
-		if(option == 2)
-		{
-			cout<<"<Walking Mode>"<<endl;
-			y = -11;
-			z = -8.5;
-			double angle_shoulder_back = -30;
-			double angle_shoulder_front = 30;
-			angle_shoulder = angle_shoulder_back;
-			int direction = 1;
-			int limit_j = 800;
-			double shoulder_inc = (range_high - range_low)/increment;
-			double shoulder_interval = (angle_shoulder_front - angle_shoulder_back)/(2*shoulder_inc);
+			assignAngles(0);
 			
-			for(int j = 0; j < limit_j;++j)
-			{
-				//Leg Height Condition
-				if(z < range_low)
-					up = 1;		//Go Up
-				if(z > range_high)
-					up = 0;		//Go Down				
-				//Leg Height Control		
-				if(up)
-					z += increment;
-				else
-					z -= increment;
-					
-				//Shoulder Angle Condition
-				if(angle_shoulder > angle_shoulder_front)
-					direction = 0;	//Go back
-				if(angle_shoulder < angle_shoulder_back)
-					direction = 1;	//Go Front
-				//Shoulder Angle Control	
-				if(direction == 1)
-					angle_shoulder += shoulder_interval;
-				else
-					angle_shoulder -= shoulder_interval;
-				
-				//Calculate Angles for Servo Motors	
-				temp_result_RF = inverse_kinematics(x, y, z);
-				temp_result_RF = angle_temp_correction_RF(temp_result_RF[0], temp_result_RF[1], temp_result_RF[2]);						
-				result = angle2PWM(temp_result_RF[0], temp_result_RF[1], temp_result_RF[2]);
-				
-				
-				pos[0] = result[0];
-				pos[1] = result[1]; //Port 1 connects to B servo 
-				pos[2] = result[2]; //Port 2 connects to A servo		
-				
-				I2C_ctrl(&pwm, pos);
-				//ros::Duration(0.2).sleep();
-				
-				if(z < -15 || z > -8.5)
-					ros::Duration(0.5).sleep();
-			}			
-		}
-		
-		//Option3: Flying Mode
-		if(option == 3)
-		{	
-			double dihedral;
-			cout<<"<Flying Mode>"<<endl;
-			cout<<"Enter Desired Dihedral Angle: "; cin >> dihedral;
-			dihedral = (double)dihedral;
-			cout<<"Enter Desired Tension Angle: "; cin >> angle_shoulder;
-			angle_shoulder = (double)angle_shoulder;
-			temp_result_LF = glide_stretch(dihedral, angle_shoulder, 170);
-			cout<<"Knee: "<<(180/PI)*temp_result_LF[0]<<"  Hip: "<<(180/PI)*temp_result_LF[1]<<"  Shoulder: "<<(180/PI)*temp_result_LF[2]<<endl;
-			double* LF = new double[3];			
-			LF[0] = PI - temp_result_LF[0];
-			LF[1] = PI - temp_result_LF[1];
-			LF[2] = PI - temp_result_LF[2];
-
-			temp_result_RF = glide_stretch(dihedral, angle_shoulder, 170);
-			cout<<"Knee: "<<(180/PI)*temp_result_RF[0]<<"  Hip: "<<(180/PI)*temp_result_RF[1]<<"  Shoulder: "<<(180/PI)*temp_result_RF[2]<<endl;			
-			double* RF = new double[3];
-			RF[0] = temp_result_RF[0];
-			RF[1] = temp_result_RF[1];
-			RF[2] = temp_result_RF[2];
-
-			double* LH = new double[3]; 
-			LH[0] = RF[0];
-			LH[1] = RF[1];
-			LH[2] = -RF[2];
-					
-			double* RH = new double[3]; 
-			RH[0] = LF[0];
-			RH[1] = LF[1];
-			RH[2] = -LF[2] + 2*PI;
-						
-			double* angle_corrected;
-			angle_corrected = angle_temp_correction_LF(LF[0], LF[1], LF[2]);
-			LF[0] = angle_corrected[0];
-			LF[1] = angle_corrected[1];
-			LF[2] = angle_corrected[2];
-					
-			angle_corrected = angle_temp_correction_RF(RF[0], RF[1], RF[2]);
-			RF[0] = angle_corrected[0];
-			RF[1] = angle_corrected[1];
-			RF[2] = angle_corrected[2];
-					
-			angle_corrected = angle_temp_correction_RF(LH[0], LH[1], LH[2]);
-			LH[0] = angle_corrected[0];
-			LH[1] = angle_corrected[1];
-			LH[2] = angle_corrected[2];
-					
-			angle_corrected = angle_temp_correction_LF(RH[0], RH[1], RH[2]);	
-			RH[0] = angle_corrected[0];
-			RH[1] = angle_corrected[1];
-			RH[2] = angle_corrected[2];					
-					
-			//Convert Angle to PWM
-			int* PWM;
-			int LF_PWM[3];
-			int RF_PWM[3];
-			int LH_PWM[3];
-			int RH_PWM[3];
-
-			PWM = angle2PWM(LF[0], LF[1], LF[2]);
-			LF_PWM[0] = PWM[0];
-			LF_PWM[1] = PWM[1];
-			LF_PWM[2] = PWM[2];
-										
-			PWM = angle2PWM(RF[0], RF[1], RF[2]);
-			RF_PWM[0] = PWM[0];
-			RF_PWM[1] = PWM[1];
-			RF_PWM[2] = PWM[2];
-					
-			PWM = angle2PWM(LH[0], LH[1], LH[2]);
-			LH_PWM[0] = PWM[0];
-			LH_PWM[1] = PWM[1];
-			LH_PWM[2] = PWM[2];
-				
-			PWM = angle2PWM(RH[0], RH[1], RH[2]);
-			RH_PWM[0] = PWM[0];
-			RH_PWM[1] = PWM[1];
-			RH_PWM[2] = PWM[2];				
-					
-			cout<<"LF_PWM Knee: "<<LF_PWM[0]<<"  LF_PWM Hip: "<<LF_PWM[1]<<"  LF_PWM Shoulder: "<<LF_PWM[2]<<endl;
-			cout<<"RF_PWM Knee: "<<RF_PWM[0]<<"  RF_PWM Hip: "<<RF_PWM[1]<<"  RF_PWM Shoulder: "<<RF_PWM[2]<<endl;
-			//cout<<"LH_PWM Knee: "<<LH_PWM[0]<<"  LH_PWM Hip: "<<LH_PWM[1]<<"  LH_PWM Shoulder: "<<LH_PWM[2]<<endl;
-			//cout<<"RH_PWM Knee: "<<RH_PWM[0]<<"  RH_PWM Hip: "<<RH_PWM[1]<<"  RH_PWM Shoulder: "<<RH_PWM[2]<<endl;		
-					
-			//Write to Servo Motors			
-			pos[0] = LF_PWM[0];
-			pos[1] = LF_PWM[1];
-			pos[2] = LF_PWM[2];
-			pos[3] = RF_PWM[0];
-			pos[4] = RF_PWM[1];
-			pos[5] = RF_PWM[2];
-			pos[6] = LH_PWM[0];
-			pos[7] = LH_PWM[1];
-			pos[8] = LH_PWM[2];
-			pos[9] = RH_PWM[0];
-			pos[10] = RH_PWM[1];
-			pos[11] = RH_PWM[2];
-			I2C_ctrl(&pwm, pos);			
-			//ros::Duration(10).sleep();			
-		}
-		
-		//Option4: Angle Control 
-		if(option == 4)
-		{
-			//cout<<"<Angle Control Mode Selected>"<<endl;
-			//cout<<"Enter Knee Angle in Degree: ";
-			//cin >> angle_knee;
-			//cout<<endl;
-			//cout<<"Enter Hip Angle in Degree: ";
-			//cin >> angle_hip;
-			//cout<<endl;
-			cout<<"Enter Shoulder Angle in Degree: ";
-			cin >> angle_shoulder;
-			cout<<endl;
-			
-			angle_knee = double(angle_knee);
-			angle_hip = double(angle_hip);	
-			angle_shoulder = double(angle_shoulder);
-			
-			angle_knee = 155;
-			angle_hip = 19;
-			angle_shoulder = 0;
-					
-			temp_result_RF = angle_temp_correction_RF(angle_knee*(PI/180), angle_hip*(PI/180), angle_shoulder*(PI/180));
-			result = angle2PWM(temp_result_RF[0], temp_result_RF[1], temp_result_RF[2]);
-			pos[0] = result[0];
-			pos[1] = result[1]; //Port 1 connects to B servo 
-			pos[2] = result[2]; //Port 2 connects to A servo
-			I2C_ctrl(&pwm, pos);
+			angle2PWM();
+			printPWM();
+			write2Motors();
+			cout<<"<Debugging Mode Complete>\n"<<endl;
+			data<<"<Debugging Mode Complete>\n"<<endl;
 		}		
 		
-		//Option5: IMU Test
+		//Option 1: <Gliding Angle Control>--------------------------------------------
+		//This mode requires user to enter dihedral & shoulder angles for fore and hind
+		//This mode has two different functions
+		//Function 1: Check tension of membrane
+		//Function 2: Check if the robot can have correct dihedral angles
+		//-----------------------------------------------------------------------------
+		
+		if (option == 1)
+		{
+			double dihedral_fore;
+			double dihedral_hind;
+			
+			cout << "<Angle Control Mode Selected>" << endl;
+			data << "<Angle Control Mode Selected>" << endl;
+			
+			cout << "Enter Desired Fore Dihedral Angle: "; cin >> dihedral_fore;
+			dihedral_fore = (double)dihedral_fore;
+			data << "Enter Desired Fore Dihedral Angle: "<<dihedral_fore<<endl;
+			
+			cout << "Enter Desired Hind Dihedral Angle: "; cin >> dihedral_hind;
+			dihedral_hind = (double)dihedral_hind;
+			data << "Enter Desired Hind Dihedral Angle: "<<dihedral_hind<<endl;
+			
+			cout << "Enter Desired Fore Shoulder Angle: "; cin >> shoulder_F;
+			shoulder_F = (double)shoulder_F;
+			data << "Enter Desired Fore Shoulder Angle: "<<shoulder_F<<endl;			
+			
+			cout << "Enter Desired Hind Shoulder Angle: "; cin >> shoulder_H;
+			shoulder_H = (double)shoulder_H;
+			data << "Enter Desired Hind Shoulder Angle: "<<shoulder_H<<endl;
+			
+			getq5();
+			
+			angles[0][0] = dihedral_fore; angles[0][1] = shoulder_F; angles[0][2] = q5_LF;
+			angles[1][0] = dihedral_fore; angles[1][1] = shoulder_F; angles[1][2] = q5_RF;
+			angles[2][0] = dihedral_hind; angles[2][1] = shoulder_H; angles[2][2] = q5_LH;
+			angles[3][0] = dihedral_hind; angles[3][1] = shoulder_H; angles[3][2] = q5_RH;
+			
+			assignAngles(2);
+
+			angle2PWM();
+			printPWM();
+			write2Motors();
+			
+			cout << "<Angle Control Mode Complete>\n" << endl;
+			data << "<Angle Control Mode Complete>\n" << endl;
+
+		}
+
+		//Option 2: <Gliding Mode>---------------------------------------------------
+		//This mode continuously reveives data from IMU and LIDAR
+		//Based on the data, it controls the wing to glide safely
+		//When the robot is about to land(determined by distance reading from LIDAR),
+		//The robot will prepare for landing
+		//---------------------------------------------------------------------------
+		if (option == 2)
+		{	
+			//Print out to console and "data.txt"
+			printf("====================<Gliding Mode Started>====================\n");
+			data<<"=====================<Gliding Mode Started>===================="<<endl;
+			printf("To get Current Status, press '.' Key\n");
+			printf("To turn ON or OFF Log Mode, press 'l' Key (Initially OFF)\n");			
+			printf("To terminate Gliding Mode, press '/' key\n\n");
+			
+			//Initialize variables	
+			init_glide = true;
+			shoulder_F = 0;
+			shoulder_H = 20;
+			
+			//While '/' key is pressed
+			while(off == 0)
+			{	
+				//Read Keyboard Input
+				c = getch();
+				
+				//Handle keyboard input
+				handleKey_glide(c);
+					
+				//IMU Update
+				ros::spinOnce();
+				
+				//Lidar Update
+				dist_m_prev = dist_m;
+				dist = cos(pitch)*(_lidar.i2cRead() - 13);
+				dist_m = (double)dist/100.0;	
+				
+				//Determine if the robot is launched
+				if(acc_x >= launchAccTH && dist_m >= launchTH)
+				{
+					launched = true;
+					status = 1;
+					printf("Launched!\n");
+					data<<"Launched!"<<endl;
+				}										
+				
+				//PID Control
+				inc_pitch = PID_pitch.calc(setpoint, pitch);
+				inc_roll = PID_roll.calc(setpoint, roll);			
+
+				//Calculate fore, hind, left & right using PID increment
+				angle_fore = -pitch - inc_pitch;
+				angle_hind = pitch + inc_pitch;
+				angle_left = -roll - inc_roll;
+				angle_right = roll + inc_roll;
+				
+				//Combine fore hind left right to calculate LF RF LH RH angles
+				angle_LF = angle_fore + angle_left;
+				angle_RF = angle_fore + angle_right;
+				angle_LH = angle_hind + angle_left;
+				angle_RH = angle_hind + angle_right;				
+				
+				//< Landing Algorithm >
+				// If it is launched && It is the first time to reach threshold height, activate Landing Mode
+				if(launched && dist_m <= landTH && !landTrigger)
+				{
+					landTrigger = true;
+					status = 2;
+					data<<"Landing Mode ON!"<<endl;
+					printf("Landing Mode ON!\n");
+				}
+				
+				// If it is Landing Mode, change dihedral angles to make the robot nose up		
+				if(landTrigger)
+				{
+					angle_LF = 28;					
+					angle_RF = 28;
+					angle_LH = -28;
+					angle_RH = -28;
+				}
+				
+				// If Landing Mode is activated & height is increasing, increase count
+				if(landTrigger && dist_m_prev <= dist_m)
+					++count_rise;
+				
+				// If Landing Mode is activated & current height is less than threshold
+				// && count_rise is greater than threshold(robot was rising for a while),
+				// Then decrease shoulder angle to increase lift force 
+				if(landTrigger && dist_m <= 0.5 && count_rise >= countTH)
+				{
+					shoulder_H = 0;
+					status = 3;
+					data<<"Rise Detected, Changing Shoulder Angle to '0'"<<endl;
+					printf("Rise Detected, Changing Shoulder Angle to '0'\n");
+				}
+				
+				//If it is Landing Mode & close to land, raise legs to protect the legs
+				if(landTrigger && dist_m <= close2landTH)
+				{
+					angle_LF = 28;					
+					angle_RF = 28;
+					angle_LH = 28;
+					angle_RH = 28;
+					status = 4;
+				}
+				
+				//If it is Landing Mode & landed
+				if(landTrigger && dist_m <= landedTH)
+				{
+					status = 5;
+					data<<"Landed"<<endl;
+					printf("Landed\n");
+					data<<"Preparing for Gait..."<<endl;
+					printf("Preparing for Gait...\n");
+					ros::Duration(2).sleep();
+					data<<"Singular OFF..."<<endl;
+					printf("Singular OFF...\n");
+					singularOFF();
+					ros::Duration(1).sleep();
+					data<<"Entering to Gait Mode..."<<endl;
+					printf("Entering to Gait Mode...\n");
+					break;
+				}
+				
+				//If it is the first time in the loop, prepare for gliding				
+				if(init_glide)
+				{
+					singularON();
+					data<<"Initializing to Singular Configuration..."<<endl;
+					printf("Initializing to Singular Configuration...\n");
+					init_glide = false;
+					ros::Duration(1).sleep(); //To make sure singular is ON
+					data<<"Initializing to Singular Configuration Complete!"<<endl;
+					printf("Initializing to Singular Configuration Complete!\n\n");
+				}
+				//Else(Not the first time in the loop),
+				//Calculate motor angles with given dihedral and shoulder angles
+				else
+				{
+					getq5();
+					angles[0][0] = angle_LF; angles[0][1] = shoulder_F; angles[0][2] = q5_LF;
+					angles[1][0] = angle_RF; angles[1][1] = shoulder_F; angles[1][2] = q5_RF;
+					angles[2][0] = angle_LH; angles[2][1] = shoulder_H; angles[2][2] = q5_LH;
+					angles[3][0] = angle_RH; angles[3][1] = shoulder_H; angles[3][2] = q5_RH;
+					assignAngles(2);
+				}			
+				
+				angle2PWM();				
+				write2Motors();				
+
+				if(logging)
+					logGlide();				
+
+			}//End of While
+			printf("====================<Gliding Mode Complete>====================\n\n");
+			data<<"====================<Gliding Mode Complete>====================\n"<<endl;
+		}//End of Gliding Mode
+
+		//Option 3: <Gait Mode>-----------------------------------------------------
+		//This mode calculate foot trajectories
+		//The trajectories will be converted to motor angles and saved in 2-D arrays
+		//Each leg will have its own index to negivate in the 2-D array
+		//Increasing or decreasing index by 1 for each loop,
+		//The robot will follow the trajectories
+		//The robot will be controlled by a keyboard
+		//The keyboard interface will be printed when user enters this mode
+		//-------------------------------------------------------------------------- 
+		if (option == 3)
+		{
+			printf("====================<Gait Mode Started>====================\n");
+			data<<"====================<Gait Mode Started>===================="<<endl;
+			printf("v: Change Mode (Swag Mode <=> Gait Mode)\n");
+			printf("z: Trot Mode\n");
+			printf("x: Lateral Sequence Walk Mode\n");
+			printf("c: Diagonal Sequence Walk Mode\n\n");
+			printf("r: Speed Up\n");
+			printf("f: Speed Down\n\n");
+			printf("q: Increase Stride\n");
+			printf("a: Decrease Stride\n\n");
+			printf("w: Increase Height\n");
+			printf("s: Decrease Height\n\n");
+			printf("e: Increase Angle\n");
+			printf("d: Decrease Angle\n\n");
+			printf("t: Increase Stance Phase\n");
+			printf("g: Decrease Stance Phase\n\n");
+			printf("Arrow Up:    Increase Gear\n");
+			printf("Arrow Down:  Decrease Gear\n");
+			printf("Arrow Right: Turn Right\n");
+			printf("Arrow Left:  Turn Left\n\n");
+			printf(".: Print Current Status\n\n");
+			printf("To terminate Gait Mode, press '/' key\n");
+			
+			//Initialize Variables
+			walk = 0;
+			idx_LF = 0; idx_RF = 0; idx_LH = 0; idx_RH = 0;
+			w_L = 3; w_R = 3; h_L = 2; h_R = 2;
+			res_gait = 50;
+			ratio_gait = 0.5;
+			angle_gait = 0;
+			
+			//While '/' is pressed
+			while(off == 0)
+			{
+				c = getch();
+				handleKey_gait(c);
+					
+				//If gear == 1, move forward
+				if(gear == 1)
+				{
+					++idx_LF;
+					++idx_RF;
+					++idx_LH;
+					++idx_RH;				
+				}
+				//If gear == -1, move backward
+				if(gear == -1)
+				{
+					--idx_LF;
+					--idx_RF;
+					--idx_LH;
+					--idx_RH;
+				}
+				
+				//Resolution Bound
+				if(res_gait <= 0)
+				{
+					res_gait = 2;
+					printf("Resolution cannot be less than or equal to 0\n");
+				}				
+				
+				//Lower Bound for idx
+				if(idx_LF < 0)
+					idx_LF += res_gait;
+				if(idx_RF < 0)
+					idx_RF += res_gait;
+				if(idx_LH < 0)
+					idx_LH += res_gait;
+				if(idx_RH < 0)
+					idx_RH += res_gait;
+					
+				//Upper Bound for idx
+				if(idx_LF >= res_gait)
+					idx_LF -= res_gait;
+				if(idx_RF >= res_gait)
+					idx_RF -= res_gait;
+				if(idx_LH >= res_gait)
+					idx_LH -= res_gait;
+				if(idx_RH >= res_gait)
+					idx_RH -= res_gait;
+				
+				//Gait Mode
+				if(walk == 0)
+				{
+					input_LF = gait(x_gait, y_gait, z_gait, w_L, h_L, angle_gait, res_gait, ratio_gait, 0);
+					input_RF = gait(x_gait, y_gait, z_gait, w_R, h_R, angle_gait, res_gait, ratio_gait, 0);
+					input_LH = gait(x_gait, y_gait, z_gait, w_L, h_L, angle_gait, res_gait, ratio_gait, 1);
+					input_RH = gait(x_gait, y_gait, z_gait, w_R, h_R, angle_gait, res_gait, ratio_gait, 1);
+				}
+				//Stationary Mode
+				if (walk == 1)
+				{
+					input_LF = fixedHeight(x_gait, y_gait + h_L, z_gait, w_L, -h_L, angle_gait, res_gait, ratio_gait, 0);
+					input_RF = fixedHeight(x_gait, y_gait, z_gait, w_R, h_R, angle_gait, res_gait, ratio_gait, 0);
+					input_LH = fixedHeight(x_gait, y_gait + h_L, z_gait, w_L, -h_L, angle_gait, res_gait, ratio_gait, 1);
+					input_RH = fixedHeight(x_gait, y_gait, z_gait, w_R, h_R, angle_gait, res_gait, ratio_gait, 1);
+				}
+				
+				//Assign angles
+				angles[0][0] = input_LF[0][idx_LF]; angles[0][1] = input_LF[1][idx_LF]; angles[0][2] = input_LF[2][idx_LF];
+				angles[1][0] = input_RF[0][idx_RF]; angles[1][1] = input_RF[1][idx_RF]; angles[1][2] = input_RF[2][idx_RF];
+				angles[2][0] = input_LH[0][idx_LH]; angles[2][1] = input_LH[1][idx_LH]; angles[2][2] = input_LH[2][idx_LH];
+				angles[3][0] = input_RH[0][idx_RH]; angles[3][1] = input_RH[1][idx_RH]; angles[3][2] = input_RH[2][idx_RH];
+				assignAngles(1);
+
+				angle2PWM();
+				//printPWM();
+				write2Motors();
+
+				//Memory Cleaning
+				for (int i = 0; i < 3; ++i)
+				{
+					delete[] input_LF[i];
+					delete[] input_RF[i];
+					delete[] input_LH[i];
+					delete[] input_RH[i];
+				}
+				delete[] input_LF;
+				delete[] input_RF;
+				delete[] input_LH;
+				delete[] input_RH;
+			}//End of while off		
+				
+			printf("====================<Gait Mode Complete>====================\n\n");
+			data<<"====================<Gait Mode Complete>====================\n"<<endl;
+			
+		}// End of Option6: Gait
+		
+		//Option 4: <Singular ON>-----------------------------------------
+		//This mode place the legs very close to singular configuration
+		//This is required for gliding mode
+		//If the legs are not placed very close to singular configuration,
+		//The robot will not have desired dihedral angles
+		//----------------------------------------------------------------
+		if(option == 4)
+		{
+			printf("<Singular ON Mode Selected>\n");
+			data<<"<Singular ON Mode Selected>"<<endl;
+			singularON();
+			printPWM();
+			printf("<Singular ON Mode Complete>\n\n");
+			data<<"<Singular ON Mode Complete>\n"<<endl;
+		}
+		
+		//Option 5: <Singular OFF>----------------------------------------
+		//This mode put the legs off of very close to singular configuration
+		//This is required for smooth transition from gliding to gait
+		//----------------------------------------------------------------
 		if(option == 5)
 		{
-			/*
-			//IMU
-			result_imu = readMeasurement_imu(channel_imu);
-			float roll, pitch, yah;
-			roll = result_imu[0]; 
-			pitch = result_imu[1]; 
-			yah = result_imu[2]; 
-			printf("Roll: %f Pitch: %f Yah: %f \n", roll, pitch, yah);
-			
-			//Servo Control
-			double setpoint = 0;
-			double inc_pitch = 0;
-			double inc_roll = 0;
-			inc_pitch = PID_pitch.calc(setpoint, pitch);
-			inc_roll = PID_roll.calc(setpoint, roll);
-			cout<<"inc_pitch: "<<inc_pitch<<endl;
-			cout<<"inc_roll: "<<inc_roll<<endl;
-
-			angle_front = -pitch + inc_pitch;//pitch + inc_pitch;
-			angle_back = -pitch + inc_pitch;//pitch + inc_pitch;
-			angle_left = roll - inc_roll;//roll + inc_roll;
-			angle_right = roll + inc_roll;//roll - inc_roll;
-			cout<<"front: "<<angle_front<<endl;
-			cout<<"back: "<<angle_back<<endl;
-			
-			angle_LF = -angle_back + angle_left;
-			angle_RF = angle_front + angle_right;
-			angle_LH = -angle_front + angle_left;
-			angle_RH = angle_back + angle_right;
-			
-			//angle_LF = 0;
-			//angle_RF = 0;
-			//angle_LH = 0;
-			//angle_RH = 0;
-			
-			result = angle2PWM_IMU(angle_LF , angle_RF, angle_LH, angle_RH );
-			//cout<<"LF_PWM: "<<result[0]<<"  RF_PWM: "<<result[1]<<"  LH_PWM: "<<result[2]<<"  RH_PWM: "<<result[3]<<endl;
-			pos[0] = result[0]; //Left Front
-			pos[1] = result[1]; //Right Front
-			pos[2] = result[2]; 
-			pos[3] = result[3];
-			I2C_ctrl(&pwm, pos);
-			option = 5;
-			*/
-			;
+			printf("<Singular OFF Mode Selected>\n");
+			data<<"<Singular OFF Mode Selected>"<<endl;
+			singularOFF();
+			printPWM();
+			printf("<Singular OFF Mode Complete>\n\n");
+			data<<"<Singular OFF Mode Complete>\n"<<endl;
 		}
-		
-		//Option6: Trot
-		if(option == 6)
-		{
-			double* x_range = new double[2];
-			x_range[0] = -5;
-			x_range[1] = 5;
-			
-			double* y_range = new double[2];
-			y_range[0] = -11;
-			y_range[1] = -11;
 
-			double* z_range = new double[2];
-			z_range[0] = -15;
-			z_range[1] = -8.5;	
-				
-			int resolution = 50;	
-			double **input_RF;
-			double **input_LF;
-
-			input_RF = trot_RF( x_range, y_range, z_range, resolution);	//For Right Fore Leg
-			input_LF = trot_LF( x_range, y_range, z_range, resolution); //For Left Fore Leg
-			
-			int repeat = 15;
-			for(int j = 0; j < repeat; ++j)
-			{
-				for(int ii = 0; ii < 4*resolution; ++ii)
-				{					
-					temp_result_LF = inverse_kinematics( input_LF[0][ii], input_LF[1][ii], input_LF[2][ii]);
-					double* LF = new double[3];
-					LF[0] = PI - temp_result_LF[0];
-					LF[1] = PI - temp_result_LF[1];
-					LF[2] = PI - temp_result_LF[2];
-
-					temp_result_RF = inverse_kinematics( input_RF[0][ii], input_RF[1][ii], input_RF[2][ii]);					
-					double* RF = new double[3];
-					RF[0] = temp_result_RF[0];
-					RF[1] = temp_result_RF[1];
-					RF[2] = temp_result_RF[2];
-
-					double* LH = new double[3]; 
-					LH[0] = RF[0];
-					LH[1] = RF[1];
-					LH[2] = -RF[2];
-					
-					double* RH = new double[3]; 
-					RH[0] = LF[0];
-					RH[1] = LF[1];
-					RH[2] = -LF[2] + 2*PI;
-
-					
-					double* angle_corrected;
-					angle_corrected = angle_temp_correction_LF(LF[0], LF[1], LF[2]);
-					LF[0] = angle_corrected[0];
-					LF[1] = angle_corrected[1];
-					LF[2] = angle_corrected[2];
-					
-					angle_corrected = angle_temp_correction_RF(RF[0], RF[1], RF[2]);
-					RF[0] = angle_corrected[0];
-					RF[1] = angle_corrected[1];
-					RF[2] = angle_corrected[2];
-					
-					angle_corrected = angle_temp_correction_RF(LH[0], LH[1], LH[2]);
-					LH[0] = angle_corrected[0];
-					LH[1] = angle_corrected[1];
-					LH[2] = angle_corrected[2];
-					
-					angle_corrected = angle_temp_correction_LF(RH[0], RH[1], RH[2]);	
-					RH[0] = angle_corrected[0];
-					RH[1] = angle_corrected[1];
-					RH[2] = angle_corrected[2];					
-					
-					//Convert Angle to PWM
-					int* PWM;
-					int LF_PWM[3];
-					int RF_PWM[3];
-					int LH_PWM[3];
-					int RH_PWM[3];
-
-					PWM = angle2PWM(LF[0], LF[1], LF[2]);
-					LF_PWM[0] = PWM[0];
-					LF_PWM[1] = PWM[1];
-					LF_PWM[2] = PWM[2];
-										
-					PWM = angle2PWM(RF[0], RF[1], RF[2]);
-					RF_PWM[0] = PWM[0];
-					RF_PWM[1] = PWM[1];
-					RF_PWM[2] = PWM[2];
-					
-					PWM = angle2PWM(LH[0], LH[1], LH[2]);
-					LH_PWM[0] = PWM[0];
-					LH_PWM[1] = PWM[1];
-					LH_PWM[2] = PWM[2];
-						
-					PWM = angle2PWM(RH[0], RH[1], RH[2]);
-					RH_PWM[0] = PWM[0];
-					RH_PWM[1] = PWM[1];
-					RH_PWM[2] = PWM[2];				
-					
-					//Write to Servo Motors			
-					pos[0] = LF_PWM[0];
-					pos[1] = LF_PWM[1];
-					pos[2] = LF_PWM[2];
-					pos[3] = RF_PWM[0];
-					pos[4] = RF_PWM[1];
-					pos[5] = RF_PWM[2];
-					pos[6] = LH_PWM[0];
-					pos[7] = LH_PWM[1];
-					pos[8] = LH_PWM[2];
-					pos[9] = RH_PWM[0];
-					pos[10] = RH_PWM[1];
-					pos[11] = RH_PWM[2];
-					I2C_ctrl(&pwm, pos);				
-				}
-			}
-			
-			//Memory Cleaning
-			for(int i = 0; i < 3; ++i)
-			{	
-				delete[] input_RF[i];
-				delete[] input_LF[i];
-				
-			}
-			delete[] input_RF;
-			delete[] input_LF;
-		}	
-		
 		// GPIO control
-		if(LED_ON == 0){
+		if (LED_ON == 0) 
 			LED_ON = 1;
-		}
-		else{
+		else
 			LED_ON = 0;
-		}
 		digitalWrite(pinNumber, LED_ON);
+		
 		//Wait
 		rate.sleep();
 	}

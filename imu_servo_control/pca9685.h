@@ -1,7 +1,7 @@
 /* Header file of pca9685 class
- * pca9685 class is a c++ class controlling the pca9685 16-channel LED driver
- * Referred from pca9685 python library and a related c++ code
- */
+* pca9685 class is a c++ class controlling the pca9685 16-channel LED driver
+* Referred from pca9685 python library and a related c++ code
+*/
 #include <string>
 #include <iostream>
 #include "wiringPiI2C.h"
@@ -32,15 +32,15 @@ using namespace std;
 #define CLOCK_FREQ 		25000000.0	//25MHz default osc clock
 
 class pca9685 {
-	private:	
-		int _i2caddr;
-		int fd;
-	public:
-		// consturctor
-		pca9685(int addr);
-		// func
-		void reset();
-		void set_pwm_freq(int freq_hz);
-		int i2cWrite(int fd, int devid, char* data, int data_len);
-		void set_pwm(vector<int> & pos);
+private:
+	int _i2caddr;
+	int fd;
+public:
+	// consturctor
+	pca9685(int addr);
+	// func
+	void reset();
+	void set_pwm_freq(int freq_hz);
+	int i2cWrite(int fd, int devid, char* data, int data_len);
+	void set_pwm(vector<int> & pos);
 };

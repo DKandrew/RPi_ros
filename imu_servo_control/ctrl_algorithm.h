@@ -1,5 +1,7 @@
 #include <stdlib.h>
 #include <math.h>
+#include <iostream>
+#include <stdio.h>
 
 double* forward_kinematics(double q1, double q2);
 
@@ -17,14 +19,25 @@ double* angle_temp_correction_RF(double knee, double hip, double shoulder);
 
 double* angle_temp_correction_LF(double knee, double hip, double shoulder);
 
-double* glide_stretch(double dihedral, double tension, double q5);
+double* glide(double dihedral, double tension, double q5);
 
-double** trot_RF(double* x, double* y, double* z, int resolution);
+double** gait(double x, double y, double z, double a, double b, double angle, int res, double ratio, int fore);
 
-double** trot_LF(double* x, double* y, double* z, int resolution);
+double** gait_ver2(double x, double y, double z, double a, double b, double angle, int res, double ratio, int fore);
+
+double** fixedHeight(double x, double y, double z, double a, double b, double angle, int res, double ratio, int fore);
+
+double** ellipse(double x, double z, double a, double b, double angle, int res, double, int fore);
+
+double** halfEllipse(double x, double z, double a, double b, double angle, int res, double ratio, int fore);
+
+double* linspace(double a, double b, int num);
+
+void deepCopy(double* a, double* b, int res);
 
 int* angle2PWM_IMU(double LF, double RF, double LH, double RH);
 
-int* angle2PWM(double knee, double hip, double shoulder);
-
-
+int* angle2PWM_LF(double knee, double hip, double shoulder);
+int* angle2PWM_RF(double knee, double hip, double shoulder);
+int* angle2PWM_LH(double knee, double hip, double shoulder);
+int* angle2PWM_RH(double knee, double hip, double shoulder);

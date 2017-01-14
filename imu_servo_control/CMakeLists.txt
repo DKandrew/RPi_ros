@@ -87,7 +87,7 @@ catkin_package(
 add_executable(imu_node_isc imu_node.cpp)
 target_link_libraries(imu_node_isc ${catkin_LIBRARIES} ${WIRINGPI_LIBRARY})
 
-add_executable(servo_node_isc servo_node.cpp pca9685.cpp ctrl_algorithm.cpp pid.cpp)
+add_executable(servo_node_isc servo_node.cpp pca9685.cpp ctrl_algorithm.cpp pid.cpp lidar.cpp)
 target_link_libraries(servo_node_isc ${catkin_LIBRARIES} ${WIRINGPI_LIBRARY})
 
 
@@ -106,35 +106,4 @@ target_link_libraries(servo_node_isc ${catkin_LIBRARIES} ${WIRINGPI_LIBRARY})
 # )
 
 ## Mark executables and/or libraries for installation
-# install(TARGETS imu_servo_control imu_servo_control_node
-#   ARCHIVE DESTINATION ${CATKIN_PACKAGE_LIB_DESTINATION}
-#   LIBRARY DESTINATION ${CATKIN_PACKAGE_LIB_DESTINATION}
-#   RUNTIME DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
-# )
-
-## Mark cpp header files for installation
-# install(DIRECTORY include/${PROJECT_NAME}/
-#   DESTINATION ${CATKIN_PACKAGE_INCLUDE_DESTINATION}
-#   FILES_MATCHING PATTERN "*.h"
-#   PATTERN ".svn" EXCLUDE
-# )
-
-## Mark other files for installation (e.g. launch and bag files, etc.)
-# install(FILES
-#   # myfile1
-#   # myfile2
-#   DESTINATION ${CATKIN_PACKAGE_SHARE_DESTINATION}
-# )
-
-#############
-## Testing ##
-#############
-
-## Add gtest based cpp test target and link libraries
-# catkin_add_gtest(${PROJECT_NAME}-test test/test_imu_servo_control.cpp)
-# if(TARGET ${PROJECT_NAME}-test)
-#   target_link_libraries(${PROJECT_NAME}-test ${PROJECT_NAME})
-# endif()
-
-## Add folders to be run by python nosetests
-# catkin_add_nosetests(test)
+# install(TARGETS imu_servo_co
