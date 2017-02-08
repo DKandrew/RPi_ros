@@ -548,7 +548,7 @@ int* angle2PWM_RF(double knee, double hip, double shoulder)
 	// Translate Hip (q2)
 	int max_hip = 1200; // The maximum position theta2 can reach
 	int min_hip = 300; // The minimum position theta2 can reach
-	angle[1] = 2.629*t2 + 640;
+	angle[1] = 2.629*t2 + 645;
 	if (angle[1] < min_hip)
 		angle[1] = min_hip;
 	else if (angle[1] > max_hip)

@@ -10,6 +10,7 @@
 #include "ctrl_algorithm.h"
 #include "wiringPi.h"
 #include "pid.h"
+#include "velocity.h"
 #include "imu_servo_control/imu_signal.h"
 #include "std_msgs/String.h"
 
@@ -23,7 +24,7 @@ using namespace std;
 
 //<Variables Section>==============================================================
 // Global data to store data received from imu_signal 
-float roll, pitch, yaw, acc_x, acc_y, acc_z;
+float roll, pitch, yaw, w_x, w_y, w_z, acc_x, acc_y, acc_z;
 
 //Rate of Communication with LIDAR and IMU 
 int sampleRate = 100;
@@ -68,8 +69,8 @@ double inc_pitch = 0;
 double inc_roll = 0;
 
 //Glide
-double default_F = 8.0;		//Default offset for fore legs
-double default_H = -6.0;	//Default offset for hind legs
+double default_F = 20.0;	//Default offset for fore legs
+double default_H = 20.0;	//Default offset for hind legs
 double angle_fore = 0;		//To be added for fore  legs
 double angle_hind = 0;		//To be added for hind  legs
 double angle_left = 0;		//To be added for left  legs
@@ -84,8 +85,12 @@ double q5_LF;				//q5 angle of left  fore leg
 double q5_RF;				//q5 angle of right fore leg
 double q5_LH;				//q5 angle of left  hind leg
 double q5_RH;				//q5 angle of right hind leg
+double perchingAngle = 30.0;//Preset Perching Angle
 bool init_glide = false;	//Boolean to initialize gliding
 int status = 0;				//Variable to log current status of gliding
+float inc_glide_keyboard = 0.01; //Fixed dihedral angle increment
+float glideAngleLimit = 40; //Bounding dihedral angle
+int glideMode = 0;
 
 //Gait
 double** input_LF;			//Double array pointer to record Left  fore leg data points
@@ -129,7 +134,7 @@ double dist_m_prev;			//Precious distance in [m]
 
 //Singular
 double singular_ON_knee = 145*PI/180;	//Knee     angle required to be close to singular position
-double singular_ON_hip = -20*PI/180;	//Hip      angle required to be close to singular position
+double singular_ON_hip = -10*PI/180;	//Hip      angle required to be close to singular position
 double singular_ON_shoulder = 0*PI/180;	//shoulder angle required to be close to singular position
 
 double singular_OFF_knee = 145*PI/180;	//Knee     angle required to be close to singular position
@@ -139,6 +144,13 @@ double singular_OFF_shoulder = 0*PI/180;//shoulder angle required to be close to
 //Setup I2C
 int addr = 0x40;				//pca9685 address
 pca9685 pwm = pca9685(addr);	//Initialize pca9685
+
+//IMU Velocity Conversion
+float diff = 1.0/sampleRate;
+float offX = -38.98;
+float offY = 3.52;
+float offZ = 2.03;
+float* v;
 
 //Log File
 ofstream data;			//Initialize ofstream 
@@ -162,6 +174,9 @@ void callback_function(const imu_servo_control::imu_signal & msg)
 	roll = msg.angle_x + 90.0;
 	pitch = -msg.angle_y;
 	yaw = msg.angle_z;
+	w_x = msg.w_x;
+	w_y = msg.w_y;
+	w_z = msg.w_z;
 	acc_x = msg.acc_x + 0.14;
 	acc_y = msg.acc_z - 0.38;
 	acc_z = msg.acc_y + 9.710297782608693;
@@ -234,13 +249,13 @@ void write2Motors()
 	pos[6] = LH_PWM[1];
 	pos[4] = LH_PWM[2];
 	pos[3] = RH_PWM[0];
-	pos[1] = RH_PWM[1];
+	pos[2] = RH_PWM[1];
 	pos[0] = RH_PWM[2];
 	pos[15] = RF_PWM[0];
 	pos[13] = RF_PWM[1];
 	pos[12] = RF_PWM[2];
 	pos[11] = LF_PWM[0];
-	pos[9] = LF_PWM[1];
+	pos[10] = LF_PWM[1];
 	pos[8] = LF_PWM[2];
 	I2C_ctrl(&pwm, pos);
 	
@@ -437,6 +452,12 @@ void logGlideInit()
 	data<<fixed<<setfill(' ')<<setw(w)<<"Roll";
 	data<<fixed<<setfill(' ')<<setw(w)<<"Pitch";
 	data<<fixed<<setfill(' ')<<setw(w)<<"Yaw";
+	data<<fixed<<setfill(' ')<<setw(w)<<"w_x";
+	data<<fixed<<setfill(' ')<<setw(w)<<"w_y";
+	data<<fixed<<setfill(' ')<<setw(w)<<"w_z";
+	data<<fixed<<setfill(' ')<<setw(w)<<"Vel_X";
+	data<<fixed<<setfill(' ')<<setw(w)<<"Vel_Y";
+	data<<fixed<<setfill(' ')<<setw(w)<<"Vel_Z";
 	data<<fixed<<setfill(' ')<<setw(w)<<"Acc_X";
 	data<<fixed<<setfill(' ')<<setw(w)<<"Acc_Y";
 	data<<fixed<<setfill(' ')<<setw(w)<<"Acc_Z";
@@ -461,6 +482,12 @@ void logGlide()
 	data<<fixed<<setfill(' ')<<setw(w)<<roll;
 	data<<fixed<<setfill(' ')<<setw(w)<<pitch;
 	data<<fixed<<setfill(' ')<<setw(w)<<yaw;
+	data<<fixed<<setfill(' ')<<setw(w)<<w_x;
+	data<<fixed<<setfill(' ')<<setw(w)<<w_y;
+	data<<fixed<<setfill(' ')<<setw(w)<<w_z;
+	data<<fixed<<setfill(' ')<<setw(w)<<v[0];
+	data<<fixed<<setfill(' ')<<setw(w)<<v[1];
+	data<<fixed<<setfill(' ')<<setw(w)<<v[2];
 	data<<fixed<<setfill(' ')<<setw(w)<<acc_x;
 	data<<fixed<<setfill(' ')<<setw(w)<<acc_y;
 	data<<fixed<<setfill(' ')<<setw(w)<<acc_z;
@@ -506,6 +533,131 @@ void handleKey_glide(char c)
 			logGlideInit();
 		}
 	}
+	
+	//Individual Leg Control
+	//LF Dihedral
+	if(c == 'q')
+	{
+		angle_LF -= inc_glide_keyboard;
+		printf(" <= Pressed  LF Dihedral Decreased => Current angle_LF: %.1f Degree\n", angle_LF);
+	}
+	if(c == 'w')
+	{
+		angle_LF += inc_glide_keyboard;
+		printf(" <= Pressed  LF Dihedral Increased => Current angle_LF: %.1f Degree\n", angle_LF);
+	}	
+	//RF Dihedral
+	if(c == 'e')
+	{
+		angle_RF -= inc_glide_keyboard;
+		printf(" <= Pressed  RF Dihedral Decreased => Current angle_LF: %.1f Degree\n", angle_RF);
+	}
+	if(c == 'r')
+	{
+		angle_RF += inc_glide_keyboard;
+		printf(" <= Pressed  RF Dihedral Increased => Current angle_LF: %.1f Degree\n", angle_RF);
+	}	
+	//LH Dihedral
+	if(c == 'a')
+	{
+		angle_LH -= inc_glide_keyboard;
+		printf(" <= Pressed  LH Dihedral Decreased => Current angle_LF: %.1f Degree\n", angle_LH);
+	}
+	if(c == 's')
+	{
+		angle_LH += inc_glide_keyboard;
+		printf(" <= Pressed  LH Dihedral Increased => Current angle_LF: %.1f Degree\n", angle_LH);
+
+	}
+	//RH Dihedral
+	if(c == 'd')
+	{
+		angle_RH -= inc_glide_keyboard;
+		printf(" <= Pressed  RH Dihedral Decreased => Current angle_LF: %.1f Degree\n", angle_RH);
+	}
+	if(c == 'f')
+	{
+		angle_RH += inc_glide_keyboard;
+		printf(" <= Pressed  RH Dihedral Increased => Current angle_LF: %.1f Degree\n", angle_RH);
+
+	}
+	
+	//Fore and Hind Pair Control
+	//Fore Pair
+	if(c == 't')
+	{
+		angle_LF -= inc_glide_keyboard;
+		angle_RF -= inc_glide_keyboard;
+		printf(" <= Pressed  Fore Dihedral Decreased => Current angle_LF: %.1f Degree  angle_RF: %.1f Degree\n", angle_LF, angle_RF);
+	}
+	if(c == 'y')
+	{
+		angle_LF += inc_glide_keyboard;
+		angle_RF += inc_glide_keyboard;
+		printf(" <= Pressed  Fore Dihedral Increased => Current angle_LF: %.1f Degree  angle_RF: %.1f Degree\n", angle_LF, angle_RF);
+	}
+	//Hind Pair
+	if(c == 'g')
+	{
+		angle_LH -= inc_glide_keyboard;
+		angle_RH -= inc_glide_keyboard;
+		printf(" <= Pressed  Hind Dihedral Decreased => Current angle_LH: %.1f Degree  angle_RH: %.1f Degree\n", angle_LH, angle_RH);
+	}
+	if(c == 'h')
+	{
+		angle_LH += inc_glide_keyboard;
+		angle_RH += inc_glide_keyboard;
+		printf(" <= Pressed  Hind Dihedral Increased => Current angle_LH: %.1f Degree  angle_RH: %.1f Degree\n", angle_LH, angle_RH);
+	}
+	
+	//Fore and Hind Pair Tension Control
+	//Fore Pair
+	if(c == 'u')
+	{
+		shoulder_F -= inc_glide_keyboard;
+		printf(" <= Pressed  Fore Tension Decreased => Current shoulder_F: %.1f Degree \n", shoulder_F);
+	}
+	if(c == 'i')
+	{
+		shoulder_F += inc_glide_keyboard;
+		printf(" <= Pressed  Fore Tension Increased => Current shoulder_F: %.1f Degree \n", shoulder_F);
+	}
+	//Hind Pair
+	if(c == 'j')
+	{
+		shoulder_H -= inc_glide_keyboard;
+		printf(" <= Pressed  Hind Tension Decreased => Current shoulder_H: %.1f Degree \n", shoulder_H);
+	}
+	if(c == 'k')
+	{
+		shoulder_H += inc_glide_keyboard;
+		printf(" <= Pressed  Hind Tension Decreased => Current shoulder_H: %.1f Degree \n", shoulder_H);
+	}
+	
+	//Preset Angles
+	//Home Position
+	if(c == 'z')
+	{
+		angle_LF = default_F;
+		angle_RF = default_F;
+		angle_LH = default_H;
+		angle_RH = default_H;
+		printf(" <= Pressed  Home Positioning");
+	}
+	//Manual Mode
+	if(c == 'x')
+		glideMode = 0;
+	//PID Horizontal Mode
+	if(c == 'c')
+		glideMode = 1;
+	//Perching
+	if(c == 'v')
+	{
+		glideMode = 2;		
+		printf(" <= Pressed  Perching Mode");
+	}
+	
+	
 }
 
 //Handle real-time keyboard input for gait
@@ -782,6 +934,9 @@ int main(int argc, char**argv)
 	//LIDAR Initialization
 	lidar _lidar = lidar(addr_lidar);
 	
+	//Velocity Initialization
+	Velocity vel = Velocity(diff, offX, offY, offZ);	
+	
 	//Logging Data Initialization
 	data.open("data.txt", ofstream::out | ofstream::app);
 	time_t t = time(0);
@@ -791,6 +946,7 @@ int main(int argc, char**argv)
 	data<<setfill('0')<<"   Time: "<<setw(2)<<now->tm_hour<<':'<<setw(2)<<now->tm_min<<':'<<setw(2)<<now->tm_sec<<endl;
 	data<<endl;
 	
+	option = -1;
 
 	
 	//Main ROS While Loop Starts
@@ -807,30 +963,35 @@ int main(int argc, char**argv)
 		dist_m = (double)dist/100.0;
 		
 		//While loop for choosing a menu
-		while(option != 0 || option != 1 || option != 2 || option != 3 || option != 4 || option != 5)
+		if(option == -1)
 		{
-			cout<<endl;
-			cout<<"< Da Real One(DR1) Operational >"<<endl;
-			cout<<"=============================================="<<endl;
-		    cout<<"Choose an Option"<<endl;
-			cout<<"0: Debugging mode"<<endl;
-			cout<<"1: Gliding Angle Control"<<endl;
-			cout<<"2: Gliding Mode"<<endl;
-			cout<<"3: Gait Mode"<<endl;
-			cout<<"4: Singular ON"<<endl;
-			cout<<"5: Singular OFF"<<endl;
-			cout<<endl;
-			cout<<"(To Terminate, press ctrl+c => press 0 => Enter)"<<endl;
-			cout<<"=============================================="<<endl;
-			cout<<"Option: "; cin >> option;
-			cout<<endl;
-			option = (int)option;
-			cout<<"Choosen Option: "<<option<<endl;
-			if( option == 0 || option == 1 || option == 2 || option == 3 || option == 4 || option == 5 )
-				break;
-			else
-				cout<<"Please Select from 0, 1, 2, 3, 4 and 5"<<endl;
-		}						  
+			while(option != -1 || option != 0 || option != 1 || option != 2 || option != 3 || option != 4 || option != 5 || option != 6 || option != 7)
+			{
+				cout<<endl;
+				cout<<"< Da Real One(DR1) Operational >"<<endl;
+				cout<<"=============================================="<<endl;
+				cout<<"Choose an Option"<<endl;
+				cout<<"0: Debugging mode"<<endl;
+				cout<<"1: Gliding Angle Control"<<endl;
+				cout<<"2: Gliding Mode"<<endl;
+				cout<<"3: Gait Mode"<<endl;
+				cout<<"4: Singular ON"<<endl;
+				cout<<"5: Singular OFF"<<endl;
+				cout<<"6: Manual Gliding Mode"<<endl;
+				cout<<"7: PWM Frequency Control"<<endl;
+				cout<<endl;
+				cout<<"(To Terminate, press ctrl+c => press 0 => Enter)"<<endl;
+				cout<<"=============================================="<<endl;
+				cout<<"Option: "; cin >> option;
+				cout<<endl;
+				option = (int)option;
+				cout<<"Choosen Option: "<<option<<endl;
+				if( option == 0 || option == 1 || option == 2 || option == 3 || option == 4 || option == 5 || option == 6 || option == 7)
+					break;
+				else
+					cout<<"Please Select from 0, 1, 2, 3, 4, 5, 6 and 7"<<endl;
+			}		
+		}				  
 
 		off = 0;	//set off = 0 to make sure each option's while loop works
 
@@ -859,6 +1020,14 @@ int main(int argc, char**argv)
 			angle2PWM();
 			printPWM();
 			write2Motors();
+			
+			dist_m_prev = dist_m;
+			dist = cos(pitch)*(_lidar.i2cRead() - 13);
+			dist_m = (double)dist/100.0;
+			printf("Lidar Reading: %.2f m\n", dist_m);
+			data<<"Lidar Reading: "<<dist_m<<endl;
+			option = -1;
+			
 			cout<<"<Debugging Mode Complete>\n"<<endl;
 			data<<"<Debugging Mode Complete>\n"<<endl;
 		}		
@@ -906,6 +1075,7 @@ int main(int argc, char**argv)
 			angle2PWM();
 			printPWM();
 			write2Motors();
+			option = -1;
 			
 			cout << "<Angle Control Mode Complete>\n" << endl;
 			data << "<Angle Control Mode Complete>\n" << endl;
@@ -929,8 +1099,10 @@ int main(int argc, char**argv)
 			
 			//Initialize variables	
 			init_glide = true;
+			launched = false;
 			shoulder_F = 0;
 			shoulder_H = 20;
+			option = -1;
 			
 			//While '/' key is pressed
 			while(off == 0)
@@ -943,6 +1115,9 @@ int main(int argc, char**argv)
 					
 				//IMU Update
 				ros::spinOnce();
+				vel.updateVel(acc_x, acc_y, acc_z);
+				vel.transform(w_x, w_y, w_z);
+				v = vel.getV();
 				
 				//Lidar Update
 				dist_m_prev = dist_m;
@@ -950,7 +1125,7 @@ int main(int argc, char**argv)
 				dist_m = (double)dist/100.0;	
 				
 				//Determine if the robot is launched
-				if(acc_x >= launchAccTH && dist_m >= launchTH)
+				if(!launched && acc_x >= launchAccTH && dist_m >= launchTH)
 				{
 					launched = true;
 					status = 1;
@@ -969,10 +1144,29 @@ int main(int argc, char**argv)
 				angle_right = roll + inc_roll;
 				
 				//Combine fore hind left right to calculate LF RF LH RH angles
-				angle_LF = angle_fore + angle_left;
-				angle_RF = angle_fore + angle_right;
-				angle_LH = angle_hind + angle_left;
-				angle_RH = angle_hind + angle_right;				
+				angle_LF = default_F + angle_fore;// + angle_left;
+				angle_RF = default_F + angle_fore;// + angle_right;
+				angle_LH = default_H + angle_hind;// + angle_left;
+				angle_RH = default_H + angle_hind;// + angle_right;	
+				
+				//Bounding angles			
+				if(angle_LF >= glideAngleLimit) 
+					angle_LF = glideAngleLimit;
+				if(angle_RF >= glideAngleLimit) 
+					angle_RF = glideAngleLimit;
+				if(angle_LH >= glideAngleLimit) 
+					angle_LH = glideAngleLimit;
+				if(angle_RH >= glideAngleLimit) 
+					angle_RH = glideAngleLimit;
+				if(angle_LF <= -glideAngleLimit) 
+					angle_LF = -glideAngleLimit;
+				if(angle_RF <= -glideAngleLimit) 
+					angle_RF = -glideAngleLimit;
+				if(angle_LH <= -glideAngleLimit) 
+					angle_LH = -glideAngleLimit;
+				if(angle_RH <= -glideAngleLimit) 
+					angle_RH = -glideAngleLimit;
+				
 				
 				//< Landing Algorithm >
 				// If it is launched && It is the first time to reach threshold height, activate Landing Mode
@@ -1033,6 +1227,7 @@ int main(int argc, char**argv)
 					ros::Duration(1).sleep();
 					data<<"Entering to Gait Mode..."<<endl;
 					printf("Entering to Gait Mode...\n");
+					option = 3;
 					break;
 				}
 				
@@ -1111,6 +1306,7 @@ int main(int argc, char**argv)
 			res_gait = 50;
 			ratio_gait = 0.5;
 			angle_gait = 0;
+			option = -1;
 			
 			//While '/' is pressed
 			while(off == 0)
@@ -1221,6 +1417,7 @@ int main(int argc, char**argv)
 			data<<"<Singular ON Mode Selected>"<<endl;
 			singularON();
 			printPWM();
+			option = -1;
 			printf("<Singular ON Mode Complete>\n\n");
 			data<<"<Singular ON Mode Complete>\n"<<endl;
 		}
@@ -1235,10 +1432,235 @@ int main(int argc, char**argv)
 			data<<"<Singular OFF Mode Selected>"<<endl;
 			singularOFF();
 			printPWM();
+			option = -1;
 			printf("<Singular OFF Mode Complete>\n\n");
 			data<<"<Singular OFF Mode Complete>\n"<<endl;
 		}
+		
+		//Option 6: <Manual Gliding Mode>--------------------------------------------
+		//This mode continuously reveives data from IMU and LIDAR
+		//Based on the data, it controls the wing to glide safely
+		//When the robot is about to land(determined by distance reading from LIDAR),
+		//The robot will prepare for landing
+		//---------------------------------------------------------------------------
+		if (option == 6)
+		{	
+			//Print out to console and "data.txt"
+			printf("====================<Gliding Mode Started>====================\n");
+			data<<"=====================<Gliding Mode Started>===================="<<endl;
+			printf("To get Current Status, press '.' Key\n");
+			printf("To turn ON or OFF Log Mode, press 'l' Key (Initially OFF)\n");			
+			printf("To terminate Gliding Mode, press '/' key\n\n");
+			
+			//Initialize variables	
+			init_glide = true;
+			launched = false;
+			angle_LF = default_F;
+			angle_RF = default_F;
+			angle_LH = default_H;
+			angle_RH = default_H;
+			shoulder_F = 0;
+			shoulder_H = 20;
+			glideMode = 0;
+			option = -1;
+			
+			//While '/' key is pressed
+			while(off == 0)
+			{	
+				//Read Keyboard Input
+				c = getch();
+				
+				//Handle keyboard input
+				handleKey_glide(c);
+					
+				//IMU Update
+				ros::spinOnce();
+				vel.updateVel(acc_x, acc_y, acc_z);
+				vel.transform(w_x, w_y, w_z);
+				v = vel.getV();				
+				
+				//Lidar Update
+				dist_m_prev = dist_m;
+				dist = cos(pitch)*(_lidar.i2cRead() - 13);
+				dist_m = (double)dist/100.0;				
+								
+				//Determine if the robot is launched
+				if(!launched && acc_x >= launchAccTH && dist_m >= launchTH)
+				{
+					launched = true;
+					status = 1;
+					printf("Launched!\n");
+					data<<"Launched!"<<endl;
+				}
+				
+				//Manual Control
+				if(glideMode == 0)
+				{
+					//Handle with handleKey_glide(char c)
+					printf("Manual Mode\n");
+					data<<"Manual Mode"<<endl;
+				}
+				
+				//PID Horizontal Control
+				if(glideMode == 1)
+				{
+					printf("PID Mode\n");
+					data<<"PID Mode"<<endl;
+					
+					//PID Control
+					inc_pitch = PID_pitch.calc(setpoint, pitch);
+					inc_roll = PID_roll.calc(setpoint, roll);			
 
+					//Calculate fore, hind, left & right using PID increment
+					angle_fore = -pitch - inc_pitch;
+					angle_hind = pitch + inc_pitch;
+					angle_left = -roll - inc_roll;
+					angle_right = roll + inc_roll;
+					
+					//Combine fore hind left right to calculate LF RF LH RH angles
+					angle_LF = default_F + angle_fore;// + angle_left;
+					angle_RF = default_F + angle_fore;// + angle_right;
+					angle_LH = default_H + angle_hind;// + angle_left;
+					angle_RH = default_H + angle_hind;// + angle_right;					
+				}
+				if(glideMode == 2)
+				{
+					printf("Perching Mode!\n");
+					data<<"Perching Mode!"<<endl;
+					angle_LF = perchingAngle;
+					angle_RF = perchingAngle;
+					angle_LH = -40;
+					angle_RH = -40;					
+				}							
+				
+				//Bounding angles			
+				if(angle_LF >= glideAngleLimit) 
+					angle_LF = glideAngleLimit;
+				if(angle_RF >= glideAngleLimit) 
+					angle_RF = glideAngleLimit;
+				if(angle_LH >= glideAngleLimit) 
+					angle_LH = glideAngleLimit;
+				if(angle_RH >= glideAngleLimit) 
+					angle_RH = glideAngleLimit;
+				if(angle_LF <= -glideAngleLimit) 
+					angle_LF = -glideAngleLimit;
+				if(angle_RF <= -glideAngleLimit) 
+					angle_RF = -glideAngleLimit;
+				if(angle_LH <= -glideAngleLimit) 
+					angle_LH = -glideAngleLimit;
+				if(angle_RH <= -glideAngleLimit) 
+					angle_RH = -glideAngleLimit;
+							
+				//< Landing Algorithm >
+				// If it is launched && It is the first time to reach threshold height, activate Landing Mode
+				if(launched && dist_m <= landTH && !landTrigger)
+				{
+					landTrigger = true;
+					status = 2;
+					angle_LF = perchingAngle;
+					angle_RF = perchingAngle;
+					angle_LH = -40;
+					angle_RH = -40;
+					data<<"Landing Mode ON!"<<endl;
+					printf("Landing Mode ON!\n");
+				}
+				
+				// If Landing Mode is activated & height is increasing, increase count
+				if(landTrigger && dist_m_prev <= dist_m)
+					++count_rise;
+				
+				// If Landing Mode is activated & current height is less than threshold
+				// && count_rise is greater than threshold(robot was rising for a while),
+				// Then decrease shoulder angle to increase lift force 
+				if(landTrigger && dist_m <= 0.5 && count_rise >= countTH)
+				{
+					status = 3;
+					data<<"Rise Detected, Changing Shoulder Angle to '0'"<<endl;
+					printf("Rise Detected, Changing Shoulder Angle to '0'\n");
+				}
+				
+				//If it is Landing Mode & close to land, raise legs to protect the legs
+				if(landTrigger && dist_m <= close2landTH)
+				{
+					status = 4;
+					angle_LF = 30;
+					angle_RF = 30;
+					angle_LH = 30;
+					angle_RH = 30;
+				}
+				
+				//If it is Landing Mode & landed
+				if(landTrigger && dist_m <= landedTH)
+				{
+					status = 5;
+					data<<"Landed"<<endl;
+					printf("Landed\n");
+					data<<"Preparing for Gait..."<<endl;
+					printf("Preparing for Gait...\n");
+					ros::Duration(2).sleep();
+					data<<"Singular OFF..."<<endl;
+					printf("Singular OFF...\n");
+					singularOFF();
+					ros::Duration(1).sleep();
+					data<<"Entering to Gait Mode..."<<endl;
+					printf("Entering to Gait Mode...\n");
+					option = 3;
+					break;
+				}
+				
+				//If it is the first time in the loop, prepare for gliding				
+				if(init_glide)
+				{
+					singularON();
+					data<<"Initializing to Singular Configuration..."<<endl;
+					printf("Initializing to Singular Configuration...\n");
+					init_glide = false;
+					ros::Duration(0.5).sleep(); //To make sure singular is ON
+					data<<"Initializing to Singular Configuration Complete!"<<endl;
+					printf("Initializing to Singular Configuration Complete!\n\n");
+				}
+				//Else(Not the first time in the loop),
+				//Calculate motor angles with given dihedral and shoulder angles
+				else
+				{
+					getq5();
+					angles[0][0] = angle_LF; angles[0][1] = shoulder_F; angles[0][2] = q5_LF;
+					angles[1][0] = angle_RF; angles[1][1] = shoulder_F; angles[1][2] = q5_RF;
+					angles[2][0] = angle_LH; angles[2][1] = shoulder_H; angles[2][2] = q5_LH;
+					angles[3][0] = angle_RH; angles[3][1] = shoulder_H; angles[3][2] = q5_RH;
+					assignAngles(2);
+				}			
+				
+				angle2PWM();				
+				write2Motors();				
+
+				if(logging)
+					logGlide();				
+
+			}//End of While
+			printf("====================<Gliding Mode Complete>====================\n\n");
+			data<<"====================<Gliding Mode Complete>====================\n"<<endl;
+		}//End of Gliding Mode
+		
+		//PWM Frequency control
+		//This mode changes PWM frequency sent to the servo motors
+		if(option == 7)
+		{
+			cout<<"<PWM Frequency control Mode Selected>"<<endl;
+			data<<"<PWM Frequency control Mode Selected>"<<endl;
+			
+			int pwmFreq = 0;
+			cout<<"Frequency(Hz): "; cin >> pwmFreq;
+			cout<<endl;
+			pwmFreq = (int)pwmFreq;
+			cout<<"Choosen Option: "<<pwmFreq<<endl;
+			pwm.set_pwm_freq(pwmFreq);
+			option = -1;
+			
+			cout<<"<PWM Frequency control Mode Complete>\n"<<endl;
+			data<<"<PWM Frequency control Mode Complete>\n"<<endl;
+		}
+		
 		// GPIO control
 		if (LED_ON == 0) 
 			LED_ON = 1;

@@ -82,6 +82,6 @@ int pca9685::i2cWrite(int fd, int devid, char* data, int data_len) {
 
 	int result = ioctl(fd, I2C_RDWR, &msgset);
 	if (result < 0)
-		cout << "Fail on executing i2cWrite" << endl;
+		//cout << "Fail on executing i2cWrite" << endl;
 	return result;
 }

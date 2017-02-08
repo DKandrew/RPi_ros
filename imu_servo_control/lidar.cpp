@@ -20,9 +20,11 @@ int lidar::i2cRead()
 	wiringPiI2CWriteReg8(fd, 0x00, 0x04);	
 	
 	//While receives data or count is greater than 100
-	while( (wiringPiI2CReadReg8(fd, 0x01) & 1 != 0) && (count != 100) )
+	while( (wiringPiI2CReadReg8(fd, 0x01) & 1 != 0) && (count <= 100) )
 	{
 		++count;
+		//if(count == 100)
+		//	printf("Count: 100");
 	}
 	//Calculate distance
 	dist_H = wiringPiI2CReadReg8(fd, 0x0f);

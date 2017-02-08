@@ -87,7 +87,7 @@ catkin_package(
 add_executable(imu_node_isc imu_node.cpp)
 target_link_libraries(imu_node_isc ${catkin_LIBRARIES} ${WIRINGPI_LIBRARY})
 
-add_executable(servo_node_isc servo_node.cpp pca9685.cpp ctrl_algorithm.cpp pid.cpp lidar.cpp)
+add_executable(servo_node_isc servo_node.cpp pca9685.cpp ctrl_algorithm.cpp pid.cpp lidar.cpp velocity.cpp)
 target_link_libraries(servo_node_isc ${catkin_LIBRARIES} ${WIRINGPI_LIBRARY})
 
 
