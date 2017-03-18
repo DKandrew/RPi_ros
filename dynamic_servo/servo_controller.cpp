@@ -37,7 +37,7 @@ int checkDataIntegrity(char *data, int len){
 int writeData(int fd, char *data, int dataLen){
 	// Enable wirte
 	digitalWrite(SWITCH, SWITCH_ON);
-	delayMicroseconds(100);			//Delay
+	delayMicroseconds(50);			//Delay
 	ssize_t result = -1;
 	while(result == -1){
 		result = write(fd, data, dataLen);	//Write
@@ -212,6 +212,8 @@ int readRegister(int fd, int id, int inst){
  * 			Otherwise, the status packet will remain on the bus and corrupte the future reading.
  */
 int readStatusPacket(int fd){
+	return 1;
+	/*
 	int len = 7;
 	char *response = new char[len];
 	int read_len = readData(fd, response, len);	// Because readData() may not read a full length of data at once. For example 
@@ -232,7 +234,7 @@ int readStatusPacket(int fd){
 	// Delete response
 	delete [] response;
 	
-	return retval;
+	return retval;*/
 }
 
 //-----------------------------------Setting Function-----------------------------------
@@ -378,7 +380,7 @@ int main(int argc, char **argv){
 	ros::init(argc, argv, "servo_node");
 	ros::NodeHandle nh;
 	//Ros Rate
-	int sampleRate;		/*------	Lowest 50ms, or it will stuck in the read status packet func	----------*/
+	int sampleRate;
 	cout << "Please enter the period (in ms): ";
 	cin >> sampleRate;
 	double frequency = 1000/sampleRate;
@@ -441,7 +443,7 @@ int main(int argc, char **argv){
 	cout << "Finish initialize." << endl;
 	
 	// Get step length and speed
-	/*		If the peroid is 50ms, the smallest step length that will work is 0.5 degree.*/
+	/*		The smallest step length that will work is 0.5 degree. When the step length is 0.1 degree, it won't work when the period is less or equal to 50ms.		*/
 	currPos = low_limit;
 	cout << "Please input the step length you want(in degree): ";
 	cin >> step_len;
