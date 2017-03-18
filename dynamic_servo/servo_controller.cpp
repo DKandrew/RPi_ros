@@ -378,7 +378,7 @@ int main(int argc, char **argv){
 	ros::init(argc, argv, "servo_node");
 	ros::NodeHandle nh;
 	//Ros Rate
-	int sampleRate;		/*------	Lowest 80ms, or it will stuck in the read status packet func	----------*/
+	int sampleRate;		/*------	Lowest 50ms, or it will stuck in the read status packet func	----------*/
 	cout << "Please enter the period (in ms): ";
 	cin >> sampleRate;
 	double frequency = 1000/sampleRate;
@@ -441,6 +441,7 @@ int main(int argc, char **argv){
 	cout << "Finish initialize." << endl;
 	
 	// Get step length and speed
+	/*		If the peroid is 50ms, the smallest step length that will work is 0.5 degree.*/
 	currPos = low_limit;
 	cout << "Please input the step length you want(in degree): ";
 	cin >> step_len;
