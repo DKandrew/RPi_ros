@@ -69,8 +69,8 @@ double inc_pitch = 0;
 double inc_roll = 0;
 
 //Glide
-double default_F = 20.0;	//Default offset for fore legs
-double default_H = 20.0;	//Default offset for hind legs
+double default_F = 30.0;	//Default offset for fore legs
+double default_H = 30.0;	//Default offset for hind legs
 double angle_fore = 0;		//To be added for fore  legs
 double angle_hind = 0;		//To be added for hind  legs
 double angle_left = 0;		//To be added for left  legs
@@ -88,7 +88,7 @@ double q5_RH;				//q5 angle of right hind leg
 double perchingAngle = 30.0;//Preset Perching Angle
 bool init_glide = false;	//Boolean to initialize gliding
 int status = 0;				//Variable to log current status of gliding
-float inc_glide_keyboard = 0.01; //Fixed dihedral angle increment
+float inc_glide_keyboard = 0.5; //Fixed dihedral angle increment
 float glideAngleLimit = 40; //Bounding dihedral angle
 int glideMode = 0;
 
@@ -98,8 +98,8 @@ double** input_RF;			//Double array pointer to record Right fore leg data points
 double** input_LH;			//Double array pointer to record Left  hind leg data points
 double** input_RH;			//Double array pointer to record Right hind leg data points
 double x_gait = 0;			//Center x point of ellipse foot trajectory
-double y_gait = -11;		//Center y point of ellipse foot trajectory
-double z_gait = -10.75;		//Center z point of ellipse foot trajectory
+double y_gait = -9.8182;//-11;		//Center y point of ellipse foot trajectory
+double z_gait = -8;//-10.75;		//Center z point of ellipse foot trajectory
 int idx_LF = 0;				//Index of left  fore foot trajectory
 int idx_RF = 0;				//Index of right fore foot trajectory
 int idx_LH = 0;				//Index of left  hind foot trajectory
@@ -646,10 +646,18 @@ void handleKey_glide(char c)
 	}
 	//Manual Mode
 	if(c == 'x')
+	{
 		glideMode = 0;
+		printf("Manual Mode\n");
+		data<<"Manual Mode"<<endl;
+	}
 	//PID Horizontal Mode
 	if(c == 'c')
+	{
 		glideMode = 1;
+		printf("PID Mode\n");
+		data<<"PID Mode"<<endl;
+	}
 	//Perching
 	if(c == 'v')
 	{
@@ -784,25 +792,28 @@ void handleKey_gait(char c)
 	//Trot
 	if (c == 'z')
 	{
+		ratio_gait = 0.6;
+		res_gait = 70;
 		idx_RF = idx_LF + res_gait/2.0;
 		idx_LH = idx_LF + res_gait/2.0;
 		idx_RH = idx_LF;
-		ratio_gait = 0.6;
 		printf(" <= Pressed\n => Trot Mode\n");
 	}			
 	//Lateral Sequence Walk
 	if (c == 'x')
 	{
+		ratio_gait = 0.7;
+		res_gait = 100;
 		idx_RF = idx_LF + res_gait*0.5;
 		idx_LH = idx_LF + res_gait*0.25;
-		idx_RH = idx_LF + res_gait*0.75;
-		ratio_gait = 0.7;
+		idx_RH = idx_LF + res_gait*0.75;		
 		printf(" <= Pressed\n => Lateral Sequence Mode\n");
 	}
 	//Diagonal Sequence Walk
 	if (c == 'c')
 	{
 		ratio_gait = 0.7;
+		res_gait = 100;
 		idx_RF = idx_LF + res_gait*0.5;
 		idx_LH = idx_LF + res_gait*0.75;
 		idx_RH = idx_LF + res_gait*0.25;				
@@ -959,8 +970,8 @@ int main(int argc, char**argv)
 		char c = getch();
 						  
 		//LIDAR reading
-		dist = cos(pitch)*(_lidar.i2cRead() - 13);
-		dist_m = (double)dist/100.0;
+		//dist = cos(pitch)*(_lidar.i2cRead() - 13);
+		//dist_m = (double)dist/100.0;
 		
 		//While loop for choosing a menu
 		if(option == -1)
@@ -1041,6 +1052,7 @@ int main(int argc, char**argv)
 		
 		if (option == 1)
 		{
+			/*
 			double dihedral_fore;
 			double dihedral_hind;
 			
@@ -1069,7 +1081,34 @@ int main(int argc, char**argv)
 			angles[1][0] = dihedral_fore; angles[1][1] = shoulder_F; angles[1][2] = q5_RF;
 			angles[2][0] = dihedral_hind; angles[2][1] = shoulder_H; angles[2][2] = q5_LH;
 			angles[3][0] = dihedral_hind; angles[3][1] = shoulder_H; angles[3][2] = q5_RH;
+			*/
+			cout << "<Angle Control Mode Selected>" << endl;
+			data << "<Angle Control Mode Selected>" << endl;
 			
+			cout << "Enter Desired LF Dihedral Angle: "; cin >> angle_LF;
+			angle_LF = (double)angle_LF;
+			
+			cout << "Enter Desired RF Dihedral Angle: "; cin >> angle_RF;
+			angle_RF = (double)angle_RF;
+			
+			cout << "Enter Desired LH Dihedral Angle: "; cin >> angle_LH;
+			angle_LH = (double)angle_LH;
+			
+			cout << "Enter Desired RH Dihedral Angle: "; cin >> angle_RH;
+			angle_RH = (double)angle_RH;
+			
+			cout << "Enter Desired Fore Shoulder Angle: "; cin >> shoulder_F;
+			shoulder_F = (double)shoulder_F;			
+			
+			cout << "Enter Desired Hind Shoulder Angle: "; cin >> shoulder_H;
+			shoulder_H = (double)shoulder_H;
+			
+			getq5();
+			
+			angles[0][0] = angle_LF; angles[0][1] = shoulder_F; angles[0][2] = q5_LF;
+			angles[1][0] = angle_RF; angles[1][1] = shoulder_F; angles[1][2] = q5_RF;
+			angles[2][0] = angle_LH; angles[2][1] = shoulder_H; angles[2][2] = q5_LH;
+			angles[3][0] = angle_RH; angles[3][1] = shoulder_H; angles[3][2] = q5_RH;
 			assignAngles(2);
 
 			angle2PWM();
@@ -1496,17 +1535,12 @@ int main(int argc, char**argv)
 				//Manual Control
 				if(glideMode == 0)
 				{
-					//Handle with handleKey_glide(char c)
-					printf("Manual Mode\n");
-					data<<"Manual Mode"<<endl;
+					//Handle with handleKey_glide(char c)					
 				}
 				
 				//PID Horizontal Control
 				if(glideMode == 1)
-				{
-					printf("PID Mode\n");
-					data<<"PID Mode"<<endl;
-					
+				{					
 					//PID Control
 					inc_pitch = PID_pitch.calc(setpoint, pitch);
 					inc_roll = PID_roll.calc(setpoint, roll);			

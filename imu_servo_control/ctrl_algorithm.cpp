@@ -495,7 +495,7 @@ int* angle2PWM_LF(double knee, double hip, double shoulder)
 	int max_knee = 1200; // The maximum position theta1 can reach
 						 //int min_theta1 = 450; // The minimum position theta1 can reach
 	int min_knee = 300; // The minimum position theta1 can reach
-	angle[0] = 2.629*t1 + 685;  //1000-450
+	angle[0] = 2.629*t1 + 683;  //1000-450
 								//angle[0] = 2.629*t1+700;  //For IMU
 	if (angle[0] < min_knee)
 		angle[0] = min_knee;
@@ -514,7 +514,7 @@ int* angle2PWM_LF(double knee, double hip, double shoulder)
 	// Translate Shoulder (qs)
 	int max_shoulder = 1000; // The maximum position theta3 can reach
 	int min_shoulder = 320; // The minimum position theta3 can reach
-	angle[2] = 2.629*t3 + 715;
+	angle[2] = 2.629*t3 + 713;
 	//angle[2] = 2.629*t3+660; //For IMU
 	if (angle[2] < min_shoulder)
 		angle[2] = min_shoulder;
@@ -548,7 +548,7 @@ int* angle2PWM_RF(double knee, double hip, double shoulder)
 	// Translate Hip (q2)
 	int max_hip = 1200; // The maximum position theta2 can reach
 	int min_hip = 300; // The minimum position theta2 can reach
-	angle[1] = 2.629*t2 + 640;
+	angle[1] = 2.629*t2 + 649;
 	if (angle[1] < min_hip)
 		angle[1] = min_hip;
 	else if (angle[1] > max_hip)
@@ -557,7 +557,7 @@ int* angle2PWM_RF(double knee, double hip, double shoulder)
 	// Translate Shoulder (qs)
 	int max_shoulder = 1000; // The maximum position theta3 can reach
 	int min_shoulder = 320; // The minimum position theta3 can reach
-	angle[2] = 2.629*t3 + 700;
+	angle[2] = 2.629*t3 + 697;
 	//angle[2] = 2.629*t3+660; //For IMU
 	if (angle[2] < min_shoulder)
 		angle[2] = min_shoulder;
@@ -591,7 +591,7 @@ int* angle2PWM_LH(double knee, double hip, double shoulder)
 	// Translate Hip (q2)
 	int max_hip = 1200; // The maximum position theta2 can reach
 	int min_hip = 300; // The minimum position theta2 can reach
-	angle[1] = 2.629*t2 + 665;
+	angle[1] = 2.629*t2 + 657;
 	if (angle[1] < min_hip)
 		angle[1] = min_hip;
 	else if (angle[1] > max_hip)
@@ -634,7 +634,7 @@ int* angle2PWM_RH(double knee, double hip, double shoulder)
 	// Translate Hip (q2)
 	int max_hip = 1200; // The maximum position theta2 can reach
 	int min_hip = 300; // The minimum position theta2 can reach
-	angle[1] = 2.629*t2 + 675;
+	angle[1] = 2.629*t2 + 685;
 	if (angle[1] < min_hip)
 		angle[1] = min_hip;
 	else if (angle[1] > max_hip)
@@ -643,7 +643,7 @@ int* angle2PWM_RH(double knee, double hip, double shoulder)
 	// Translate Shoulder (qs)
 	int max_shoulder = 1000; // The maximum position theta3 can reach
 	int min_shoulder = 320; // The minimum position theta3 can reach
-	angle[2] = 2.629*t3 + 700;
+	angle[2] = 2.629*t3 + 695;
 	//angle[2] = 2.629*t3+660; //For IMU
 	if (angle[2] < min_shoulder)
 		angle[2] = min_shoulder;
