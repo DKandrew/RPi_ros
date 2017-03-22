@@ -653,3 +653,14 @@ int* angle2PWM_RH(double knee, double hip, double shoulder)
 	// Return angle
 	return angle;
 }
+
+int pwmDS6100(double angle)
+{
+	int max = 2150;
+	int min = 850;
+	int mid = 1500;
+	double a = 3.611;
+	angle = mid + a*angle;
+	
+	return angle;
+}

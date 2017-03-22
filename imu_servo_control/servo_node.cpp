@@ -257,6 +257,11 @@ void write2Motors()
 	pos[11] = LF_PWM[0];
 	pos[10] = LF_PWM[1];
 	pos[8] = LF_PWM[2];
+	
+	//Delete after Testing DS6100
+	pos[5] = pwmDS6100(90);
+	pos[9] = pwmDS6100(90);
+	
 	I2C_ctrl(&pwm, pos);
 	
 	return;

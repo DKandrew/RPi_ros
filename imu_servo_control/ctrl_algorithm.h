@@ -41,3 +41,4 @@ int* angle2PWM_LF(double knee, double hip, double shoulder);
 int* angle2PWM_RF(double knee, double hip, double shoulder);
 int* angle2PWM_LH(double knee, double hip, double shoulder);
 int* angle2PWM_RH(double knee, double hip, double shoulder);
+int pwmDS6100(double angle);

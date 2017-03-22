@@ -362,17 +362,6 @@ int readPresentPosition(int fd, int id){
 	return readRegister(fd, id, AX_PRESENT_POSITION_L);
 }
 
-void servoControl(int fd, int id, int CW_limit, int CCW_limit, int step_len, int speed){
-	cout << "Start function with currPos: " << currPos << ", step_len" << step_len << endl;
-	int target =  currPos + step_len;//+CW_limit);
-	if(target > CCW_limit) target = target-CCW_limit+CW_limit;
-	cout << "target: " << target << endl;
-	setPosition(fd, id, target);
-	setMovingSpeed(fd, id, speed);
-	cout << "Finish task" << endl;
-	expect = target;
-}
-
 //-----------------------------------Main-----------------------------------
 // To complie: g++ servo_control_demo.cpp -o test -lwiringPi
 int main(int argc, char **argv){
@@ -452,7 +441,6 @@ int main(int argc, char **argv){
 	int target = 0;		// The goal position
 	
 	while(ros::ok()){
-		//cout << 1 <<endl;
 		if(!do_convert){
 			target = currPos + step_len;
 			if(target > hi_limit) target = hi_limit;
@@ -461,13 +449,11 @@ int main(int argc, char **argv){
 			target = currPos - step_len;
 			if(target < hi_limit) target = hi_limit;
 		}
-		//cout << 2 << endl;
 		setPosition(fd, id, target);
 		currPos = target;
-		//cout << 3 << endl;
 		if(!do_convert && currPos >= hi_limit) break;
 		else if(do_convert && currPos <= hi_limit) break;
-		//cout << 4 << endl;
+		
 		//Wait
 		rate.sleep();
 	}
