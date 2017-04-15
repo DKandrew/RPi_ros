@@ -1,5 +1,6 @@
 #include <ros/ros.h>
 #include "servo_controller.h"
+#include <wiringPiSPI.h>
 
 int modeFlag = 0; 			// if modeFlag == 0, it is in Wheel mode; if modeFlag == 1 it is in Joint mode
 int DEBUG = 1;				// Debug flag
@@ -362,8 +363,17 @@ int readPresentPosition(int fd, int id){
 	return readRegister(fd, id, AX_PRESENT_POSITION_L);
 }
 
+//-----------------------------------Encoder Function-----------------------------------
+int readEncoder(int channel){
+	int dataLen = 2;
+	unsigned char data[dataLen] = {0xff, 0xff};
+	wiringPiSPIDataRW(channel, data, dataLen);
+	int EncReading = (((unsigned int) (data[0] & 0x7f)) << 6) + (((unsigned int) (data[1] & 0xf8)) >> 2);
+	return EncReading;
+}
+
 //-----------------------------------Main-----------------------------------
-// To complie: g++ servo_control_demo.cpp -o test -lwiringPi
+// To run: 
 int main(int argc, char **argv){
 	//Initialize ROS system
 	ros::init(argc, argv, "servo_node");
@@ -387,9 +397,16 @@ int main(int argc, char **argv){
 	wiringPiSetup();
 	pinMode(SWITCH, OUTPUT);
 	digitalWrite(SWITCH, SWITCH_ON);
-
-	char ping[6] = {0xFF, 0xFF, 0x01, 0x02, 0x01, 0xFB};		// A ping instrcution packet. Use to check if servo response. The servo should return 0xFF, 0xFF, 0x01, 0x02, 0x00, 0xFC
 	
+	//Setup SPI for Encoder
+	int channel = 0; // Pi has 2 channels: 0 and 1
+	int spi_freq = 1000000;
+	int spi_mode = 3; // IMU needs mode3. // Encoder works for all the modes. (in mode 0, it reads different value.)
+	if(wiringPiSPISetupMode(channel,spi_freq,spi_mode) == -1){
+		cout << "wiringPi SPI setup error " << endl;
+		return -1;
+	}
+
 	//---Variable---
 	int posi = 0;
 	int id = 1;
@@ -428,6 +445,8 @@ int main(int argc, char **argv){
 	}
 	setPosition(fd, id, low_limit);
 	setMovingSpeed(fd, id, 100);
+	// zero the encoder and synchonize
+	int encoderBase = readEncoder(channel);
 	
 	cout << "Finish initialize." << endl;
 	
@@ -449,6 +468,12 @@ int main(int argc, char **argv){
 			target = currPos - step_len;
 			if(target < hi_limit) target = hi_limit;
 		}
+		//Encoder: Read current position 
+		int EncChannel = 0;
+		int EncReading = readEncoder(EncChannel);
+		float EncAngle =((float)(EncReading - encoderBase )/8192)*(360);  
+		cout <<"Encoder angle: "<< EncAngle << endl;		//debugging
+		
 		setPosition(fd, id, target);
 		currPos = target;
 		if(!do_convert && currPos >= hi_limit) break;
